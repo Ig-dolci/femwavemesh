@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from kmvmesh import FacetedSurface, audit_tetrahedra, audit_triangles
-from kmvmesh.io import zero_based
+from femwavemesh import FacetedSurface, audit_tetrahedra, audit_triangles
+from femwavemesh.io import zero_based
 
 CUBE_POINTS = np.array([[x, y, -z] for z in (0, 1) for y in (0, 1) for x in (0, 1)], float)
 CUBE = np.array([[0, 1, 3, 7], [0, 1, 5, 7], [0, 2, 3, 7], [0, 2, 6, 7],

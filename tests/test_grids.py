@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from kmvmesh import FacetedSurface, VelocityGrid, VelocityGrid3D
+from femwavemesh import FacetedSurface, VelocityGrid, VelocityGrid3D
 
 
 def linear_grid() -> VelocityGrid:

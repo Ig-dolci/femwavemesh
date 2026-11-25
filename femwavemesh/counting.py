@@ -1,9 +1,10 @@
 """Degrees of freedom and local size of a mesh.
 
-The KMV (Kong-Mulder-Veldhuizen) mass-lumped elements put a fixed number of
-degrees of freedom on each vertex, edge, face and cell interior, so the
-dimension of the scalar space follows from the entity counts of the mesh.
-The numbers per entity are those of FIAT's ``KongMulderVeldhuizen`` element.
+A finite element puts a fixed number of degrees of freedom on each vertex,
+edge, face and cell interior, so the dimension of its space on a mesh follows
+from the entity counts of the mesh. The numbers per entity come from FIAT,
+for any element family it defines: Lagrange, discontinuous Lagrange, the
+mass-lumped KMV (Kong-Mulder-Veldhuizen) elements, and so on.
 """
 
 from __future__ import annotations
@@ -12,40 +13,73 @@ from itertools import combinations
 
 import numpy as np
 
+#: FIAT name of the KMV family.
+KMV = "Kong-Mulder-Veldhuizen"
 
-def kmv_entity_dofs(dimension: int, degree: int) -> tuple[int, ...]:
-    """KMV degrees of freedom per vertex, edge, (face,) and cell interior.
+#: Firedrake's short names of common families, and the FIAT names they mean.
+FAMILY_ALIASES = {"CG": "Lagrange", "P": "Lagrange",
+                  "DG": "Discontinuous Lagrange", "KMV": KMV}
+
+
+def element_family(family: str) -> str:
+    """FIAT name of an element family.
+
+    Parameters
+    ----------
+    family : str
+        A FIAT name (``"Lagrange"``, ``"Discontinuous Lagrange"``,
+        ``"Kong-Mulder-Veldhuizen"``, ...) or one of Firedrake's short names
+        in :data:`FAMILY_ALIASES` (``"CG"``, ``"P"``, ``"DG"``, ``"KMV"``).
+
+    Returns
+    -------
+    str
+        The FIAT name.
+    """
+    return FAMILY_ALIASES.get(family, family)
+
+
+def entity_dofs(dimension: int, family: str, degree: int) -> tuple[int, ...]:
+    """Degrees of freedom of an element per vertex, edge, (face,) and interior.
 
     Parameters
     ----------
     dimension : int
         Dimension of the simplex: 2 for triangles, 3 for tetrahedra.
+    family : str
+        Element family (see :func:`element_family`).
     degree : int
-        Polynomial degree of the KMV element.
+        Polynomial degree of the element.
 
     Returns
     -------
     tuple of int
         Degrees of freedom on each entity of dimension 0 to ``dimension``,
-        from ``FIAT.KongMulderVeldhuizen``.
+        from FIAT's element.
 
     Raises
     ------
     ImportError
         If FIAT is not installed.
     ValueError
-        If FIAT has no KMV element of that degree on those simplices.
+        If FIAT has no such family, or no element of that degree on those
+        simplices.
     """
     # Deferred: importing FIAT takes about two seconds.
     import FIAT
 
+    name = element_family(family)
     try:
-        element = FIAT.KongMulderVeldhuizen(FIAT.ufc_simplex(dimension), degree)
+        element_class = FIAT.supported_elements[name]
+    except KeyError:
+        raise ValueError(f"FIAT has no element family {family!r}.") from None
+    try:
+        element = element_class(FIAT.ufc_simplex(dimension), degree)
     except NotImplementedError:
-        raise ValueError(f"No KMV element of degree {degree} on "
+        raise ValueError(f"No {name} element of degree {degree} on "
                          f"{dimension}D simplices.") from None
-    entity_dofs = element.entity_dofs()
-    return tuple(len(entity_dofs[d][0]) for d in range(dimension + 1))
+    dofs = element.entity_dofs()
+    return tuple(len(dofs[d][0]) for d in range(dimension + 1))
 
 
 def entity_counts(cells: np.ndarray) -> tuple[int, ...]:
@@ -72,8 +106,41 @@ def entity_counts(cells: np.ndarray) -> tuple[int, ...]:
     return tuple(counts)
 
 
+def count_dofs(cells: np.ndarray, family: str, degree: int) -> int:
+    """Count the degrees of freedom of an element on a simplicial mesh.
+
+    Parameters
+    ----------
+    cells : numpy.ndarray
+        Vertex indices, shape ``(n_triangles, 3)`` or ``(n_tetrahedra, 4)``.
+    family : str
+        Element family: a FIAT name or a Firedrake short name such as
+        ``"CG"``, ``"DG"`` or ``"KMV"`` (see :func:`element_family`).
+    degree : int
+        Polynomial degree of the element.
+
+    Returns
+    -------
+    int
+        Dimension of the element's space on the mesh (one component).
+
+    Raises
+    ------
+    ImportError
+        If FIAT is not installed.
+    ValueError
+        If FIAT has no such family, or no element of that degree on those
+        cells.
+    """
+    per_entity = entity_dofs(np.shape(cells)[1] - 1, family, degree)
+    return int(sum(dofs * count for dofs, count
+                   in zip(per_entity, entity_counts(cells))))
+
+
 def count_kmv_dofs(cells: np.ndarray, degree: int) -> int:
     """Count the KMV degrees of freedom of a triangulation or tetrahedralization.
+
+    The same as ``count_dofs(cells, "KMV", degree)``.
 
     Parameters
     ----------
@@ -95,9 +162,7 @@ def count_kmv_dofs(cells: np.ndarray, degree: int) -> int:
     ValueError
         If there is no KMV element of that degree on those cells.
     """
-    per_entity = kmv_entity_dofs(np.shape(cells)[1] - 1, degree)
-    return int(sum(dofs * count for dofs, count
-                   in zip(per_entity, entity_counts(cells))))
+    return count_dofs(cells, KMV, degree)
 
 
 def mean_edge_lengths(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:

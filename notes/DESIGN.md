@@ -1,7 +1,11 @@
-# kmvmesh: design
+# femwavemesh: design
 
-`kmvmesh` generates the unstructured meshes of the KMV wave solvers (spyro and
-the 3D Salt campaigns) and holds the mesh-size laws that drive them. It
+`femwavemesh` generates the unstructured meshes of finite-element wave solvers
+(spyro's KMV solvers and the 3D Salt campaigns) and holds the mesh-size laws
+that drive them. It was called `kmvmesh` until version 0.2.0; the package
+`kmvmesh` remains as an alias that warns and re-exports `femwavemesh`, so
+code written against the old name (spyro's `from kmvmesh import ...`) keeps
+working until it moves to the new one. It
 depends on numpy, scipy, gmsh and FIAT only. It returns a mesh as a gmsh `.msh` file
 plus, on request, a metadata dictionary; loading the file (Firedrake) is the
 caller's job.
@@ -31,13 +35,13 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
 | `generate` | `generate_mesh` 2D triangles, structured background size, horizontal interfaces | spyro `mesh_generation` |
 | | `generate_mesh_3d` 3D tetrahedra (HXT), box or box split by a faceted sea floor | `malha3d_matriz.gerar`, `malhas_uniformes._caixa`, `_caixa_com_fundo` |
 | `io` | `read_triangulation`, `read_tetrahedra`, `read_mesh` (either, by the file's dimension) | spyro `mesh_generation`; new (3D) |
-| `counting` | `count_kmv_dofs` KMV 1..6 on triangles, 1..3 on tetrahedra (DOFs per entity from `FIAT.KongMulderVeldhuizen`) | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3) |
+| `counting` | `count_dofs` any FIAT element family and degree (DOFs per entity from FIAT, times the entity counts); `count_kmv_dofs` the same for KMV, 1..6 on triangles, 1..3 on tetrahedra | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3); generalized |
 | | `mean_edge_lengths`, `local_mesh_size` (with `counting.find_triangles`, see below) | spyro `mesh_generation` |
 | `audit` | `audit_triangles`, `audit_tetrahedra`, `audit_mesh` geometry, entity counts, DOFs, interface conformity | `malhas_uniformes.malha_2d`; v4 `mesh_geometry.audit_tetrahedra` |
 
 ## What changes in spyro
 
-* `spyro/adaptivity/mesh_generation.py` becomes a re-export of the kmvmesh
+* `spyro/adaptivity/mesh_generation.py` becomes a re-export of the femwavemesh
   names it used to define (`RectangularDomain`, `generate_mesh`,
   `read_triangulation`, `mean_edge_lengths`, `local_mesh_size`,
   `count_kmv_dofs`, `TOP`, `BOTTOM`, `X_MIN`, `X_MAX`).
@@ -45,12 +49,12 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
   `adjoint_density`) and re-exports `VelocityGrid`, `AdaptiveSizeField`,
   `size_perturbation`.
 * `spyro.adaptivity` exports the same names as before.
-* `automatic_loop` and `fwi_loop` import the mesh names from kmvmesh (the
+* `automatic_loop` and `fwi_loop` import the mesh names from femwavemesh (the
   module-level names stay, so subclasses and monkeypatches keep working) and
   use `cpw_size`, `dof_calibration` and `fit_to_budget` instead of their own
   copies of the CPW law, the calibration and the rescaling loop.
-* `fwi_functional` imports `RectangularDomain` and `VelocityGrid` from kmvmesh.
-* kmvmesh is a dependency in `pyproject.toml`.
+* `fwi_functional` imports `RectangularDomain` and `VelocityGrid` from femwavemesh.
+* femwavemesh is a dependency in `pyproject.toml`.
 
 ## What stays in spyro
 
@@ -63,13 +67,13 @@ built on rank 0), mesh names and reports, and everything Firedrake.
 Model file formats (npz keys), the density from indicator files, the
 resumable trial records, and the 3D campaigns' own searches for the scale
 (`matriz3d.malha_adjunta`: calibrated bisection with a correction factor and
-12 trials; v4 `phase3_meshes.tune_mesh`: bracketed search). kmvmesh offers
+12 trials; v4 `phase3_meshes.tune_mesh`: bracketed search). femwavemesh offers
 `fit_to_budget` (spyro's 2D search, generic in `d`) instead.
 
 ## Point location without matplotlib
 
 spyro's `local_mesh_size` located grid points with matplotlib's
-`TrapezoidMapTriFinder`. kmvmesh does it with numpy (candidate triangles by
+`TrapezoidMapTriFinder`. femwavemesh does it with numpy (candidate triangles by
 bounding box, orientation tests in the trifinder's canonical edge direction)
 and reproduces the trifinder's ties: a point on an edge takes the triangle
 "above" the edge in the trifinder's frame, a point on a vertex the
@@ -99,7 +103,7 @@ One gap remains. For a point within an ulp or two of a vertex, but not on
 it, the trifinder's rounded orientation tests can contradict each other. Its
 answer then depends on the order of its search tree, which it builds from a
 `std::shuffle` of the edges, and `std::shuffle` differs between libstdc++ and
-libc++. kmvmesh does not try to reproduce that.
+libc++. femwavemesh does not try to reproduce that.
 
 ## Known numerical differences (documented, tested to rounding)
 
@@ -114,11 +118,11 @@ libc++. kmvmesh does not try to reproduce that.
 
 * `tests/test_*.py`: unit tests of every module (gmsh needed for the
   generation tests).
-* `tests/test_firedrake.py`: the meshes loaded in Firedrake (KMV dimensions,
-  markers, interfaces as facets); Firedrake is a test requirement only, and
+* `tests/test_firedrake.py`: the meshes loaded in Firedrake (dimensions of
+  KMV, Lagrange and DG spaces, markers, interfaces as facets); Firedrake is a test requirement only, and
   the file is skipped without it.
 * `tests/regression/`: the library against frozen copies of the code it
   replaces (`tests/regression/legacy/`), comparing SHA-256 of the `.msh` and
   the node and element arrays. The 3D cases need the Salt models
-  (`KMVMESH_SALT3D_DATA`) and the legacy local size needs matplotlib; each
+  (`FEMWAVEMESH_SALT3D_DATA`) and the legacy local size needs matplotlib; each
   case is skipped when its requirement is missing.

@@ -5,9 +5,9 @@ import math
 import numpy as np
 import pytest
 
-from kmvmesh import (AdaptiveSizeField, CPWSize, ScatteredSize, SizeLaw, UniformSize,
-                     VelocityGrid3D, cpw_size, dof_calibration, fit_to_budget,
-                     size_perturbation, source_refinement)
+from femwavemesh import (AdaptiveSizeField, CPWSize, ScatteredSize, SizeLaw, UniformSize,
+                         VelocityGrid3D, cpw_size, dof_calibration, fit_to_budget,
+                         size_perturbation, source_refinement)
 
 
 def test_cpw_size() -> None:

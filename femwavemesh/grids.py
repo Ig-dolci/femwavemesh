@@ -1,7 +1,7 @@
 """Velocities (and sizes) sampled on regular grids.
 
 :class:`VelocityGrid` is the 2D sampler of spyro, in its ``(z, x)``
-coordinates; :func:`~kmvmesh.generate_mesh` takes a mesh size in the same
+coordinates; :func:`~femwavemesh.generate_mesh` takes a mesh size in the same
 form. :class:`VelocityGrid3D` is the 3D sampler of the Salt campaigns, on a
 ``(depth, y, x)`` grid.
 """
@@ -87,7 +87,7 @@ class VelocityGrid:
         factor : float or numpy.ndarray
             Multiplier, e.g. :math:`1/(C f)` for the uniform-CPW edge length,
             or an array of the grid's shape (see
-            :func:`~kmvmesh.size_perturbation`).
+            :func:`~femwavemesh.size_perturbation`).
 
         Returns
         -------
@@ -128,7 +128,7 @@ class VelocityGrid3D:
         ``(x, y, z)`` is at depth ``-z``.
     fixed_layer : tuple, optional
         ``(surface, value)`` with ``surface`` a
-        :class:`~kmvmesh.FacetedSurface`: the velocity is ``value`` on and
+        :class:`~femwavemesh.FacetedSurface`: the velocity is ``value`` on and
         above the surface (within 1e-9 km), whatever ``values`` hold there,
         such as water over a sea floor. The callable and :meth:`on_grid`
         apply it.

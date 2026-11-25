@@ -1,9 +1,9 @@
-# kmvmesh
+# femwavemesh
 
-Unstructured meshes and mesh-size laws for wave solvers with KMV
-(Kong-Mulder-Veldhuizen) mass-lumped elements.
+Unstructured meshes and mesh-size laws for finite-element wave solvers, such
+as those with KMV (Kong-Mulder-Veldhuizen) mass-lumped elements.
 
-kmvmesh writes gmsh meshes of a padded rectangle (triangles) or a padded box
+femwavemesh writes gmsh meshes of a padded rectangle (triangles) or a padded box
 (tetrahedra), conforming to horizontal interfaces in 2D and to a faceted sea
 floor in 3D, from a target edge length:
 
@@ -15,7 +15,8 @@ floor in 3D, from a target edge length:
   replicas.
 
 It reads the meshes back, samples their local size on a grid, counts their
-KMV degrees of freedom and audits their geometry and conformity. It depends
+degrees of freedom for any FIAT element (KMV, Lagrange, discontinuous
+Lagrange, ...) and audits their geometry and conformity. It depends
 on numpy, scipy, gmsh and FIAT only: the solver (spyro, with Firedrake) loads the
 `.msh` file, and the refinement density comes from the solver too.
 
@@ -23,15 +24,20 @@ The code was extracted from spyro's `spyro.adaptivity` and from the 3D Salt
 campaigns. For the same inputs it writes the same meshes, byte for byte
 (see [Tests](#tests)).
 
+The library was called `kmvmesh` until version 0.2.0. `import kmvmesh` still
+works, with a `DeprecationWarning`: it gives the names of `femwavemesh`. To
+move an installation to the new name, uninstall the old distribution first
+(`python3 -m pip uninstall kmvmesh`), then install this one.
+
 ## Installation
 
 ```bash
-python3 -m pip install -e /path/to/kmvmesh        # numpy, scipy, gmsh, firedrake-fiat
-python3 -m pip install -e "/path/to/kmvmesh[dev]"  # plus pytest, flake8, ruff
+python3 -m pip install -e /path/to/femwavemesh        # numpy, scipy, gmsh, firedrake-fiat
+python3 -m pip install -e "/path/to/femwavemesh[dev]"  # plus pytest, flake8, ruff
 ```
 
-`import kmvmesh` imports neither gmsh nor FIAT: the functions that mesh or
-read meshes load gmsh, and the KMV counts (and the audits that report them)
+`import femwavemesh` imports neither gmsh nor FIAT: the functions that mesh or
+read meshes load gmsh, and the DOF counts (and the audits that report them)
 load FIAT.
 
 ## Conventions
@@ -48,8 +54,8 @@ load FIAT.
 
 ## How it works
 
-kmvmesh describes the problem (domain, interfaces and target size) and gmsh
-generates the mesh. kmvmesh then reads the file back to count its degrees of
+femwavemesh describes the problem (domain, interfaces and target size) and gmsh
+generates the mesh. femwavemesh then reads the file back to count its degrees of
 freedom and audit it; the solver loads the same `.msh` on its own.
 
 ```mermaid
@@ -82,7 +88,7 @@ flowchart TD
     current["<b>Current mesh, density</b><br/>density from the solver"]
     law["<b>Adaptive size law</b><br/>SizeLaw: h_k, rho,<br/>floor, ceiling"]
     scale["<b>First scale alpha</b><br/>dof_calibration<br/>scale_for"]
-    build["<b>build(law)</b><br/>gmsh meshes,<br/>kmvmesh counts DOFs"]
+    build["<b>build(law)</b><br/>gmsh meshes,<br/>femwavemesh counts DOFs"]
     test{"DOFs within 2%<br/>of the target?"}
     done["<b>New mesh</b><br/>back to the solver"]
     fix["<b>Rescale alpha</b><br/>alpha *<br/>(N / N_target)^(1/d)"]
@@ -97,7 +103,7 @@ flowchart TD
     class current,done outside
 ```
 
-Purple: kmvmesh; teal: gmsh; gray: outside the library.
+Purple: femwavemesh; teal: gmsh; gray: outside the library.
 
 ## Examples
 
@@ -105,42 +111,42 @@ A 2D mesh with 4 cells per wavelength and a sea floor at 0.45 km:
 
 ```python
 import numpy as np
-import kmvmesh
+import femwavemesh
 
-domain = kmvmesh.RectangularDomain(z_min=-2.0, x_min=0.0, x_max=4.0, pad=0.3)
+domain = femwavemesh.RectangularDomain(z_min=-2.0, x_min=0.0, x_max=4.0, pad=0.3)
 z, x = domain.grid(0.005)
 Z, X = np.meshgrid(z, x, indexing="ij")
 velocity = np.where(Z > -0.45, 1.5, 2.0 - 0.3 * Z)
-size = kmvmesh.VelocityGrid(kmvmesh.cpw_size(velocity, 4.0, 5.0), z[0], x[0], 0.005, 0.005)
-path = kmvmesh.generate_mesh("cpw4.msh", domain, size, conforming_depths=[-0.45])
-print(kmvmesh.audit_mesh(path, degree=4, conforming_depths=[-0.45]))
+size = femwavemesh.VelocityGrid(femwavemesh.cpw_size(velocity, 4.0, 5.0), z[0], x[0], 0.005, 0.005)
+path = femwavemesh.generate_mesh("cpw4.msh", domain, size, conforming_depths=[-0.45])
+print(femwavemesh.audit_mesh(path, degree=4, conforming_depths=[-0.45]))
 ```
 
 An adaptive mesh with a budget, from the current mesh and a density:
 
 ```python
 # density: refinement density on the same grid, from the solver.
-points, triangles = kmvmesh.read_triangulation(path)
-current = kmvmesh.local_mesh_size(points, triangles, z, x)
-field = kmvmesh.AdaptiveSizeField(density, current, z, x, order=2.7)
+points, triangles = femwavemesh.read_triangulation(path)
+current = femwavemesh.local_mesh_size(points, triangles, z, x)
+field = femwavemesh.AdaptiveSizeField(density, current, z, x, order=2.7)
 field.set_floor(velocity, 5.0, equivalent_cpw=5.0)
-calibration = kmvmesh.dof_calibration(kmvmesh.count_kmv_dofs(triangles, 4), current, 0.005)
+calibration = femwavemesh.dof_calibration(femwavemesh.count_kmv_dofs(triangles, 4), current, 0.005)
 
 def build(law):
-    kmvmesh.generate_mesh("adaptive.msh", domain, law.grid, [-0.45])
-    return kmvmesh.count_kmv_dofs(kmvmesh.read_triangulation("adaptive.msh")[1], 4)
+    femwavemesh.generate_mesh("adaptive.msh", domain, law.grid, [-0.45])
+    return femwavemesh.count_kmv_dofs(femwavemesh.read_triangulation("adaptive.msh")[1], 4)
 
-dofs = kmvmesh.fit_to_budget(field, target=200_000, calibration=calibration, build=build)
+dofs = femwavemesh.fit_to_budget(field, target=200_000, calibration=calibration, build=build)
 ```
 
 A 3D mesh of a box split by a sea floor, 2 cells per wavelength:
 
 ```python
-box = kmvmesh.BoxDomain(x_min=6.6, x_max=8.6, y_min=4.1, y_max=6.1, z_min=-2.7, pad=0.3)
-floor = kmvmesh.FacetedSurface.from_water_depth(water_depth, xs, ys, box, sigma=0.1, spacing=0.1)
-velocity = kmvmesh.VelocityGrid3D(vp, xs, ys, depths, fixed_layer=(floor, 1.5))
-path = kmvmesh.generate_mesh_3d("salt.msh", box, kmvmesh.CPWSize(velocity, 2.0, 3.5), floor)
-print(kmvmesh.audit_tetrahedra(*kmvmesh.read_tetrahedra(path), floor))
+box = femwavemesh.BoxDomain(x_min=6.6, x_max=8.6, y_min=4.1, y_max=6.1, z_min=-2.7, pad=0.3)
+floor = femwavemesh.FacetedSurface.from_water_depth(water_depth, xs, ys, box, sigma=0.1, spacing=0.1)
+velocity = femwavemesh.VelocityGrid3D(vp, xs, ys, depths, fixed_layer=(floor, 1.5))
+path = femwavemesh.generate_mesh_3d("salt.msh", box, femwavemesh.CPWSize(velocity, 2.0, 3.5), floor)
+print(femwavemesh.audit_tetrahedra(*femwavemesh.read_tetrahedra(path), floor))
 ```
 
 ## API
@@ -164,9 +170,10 @@ print(kmvmesh.audit_tetrahedra(*kmvmesh.read_tetrahedra(path), floor))
 | `generate_mesh` | 2D triangles from a size grid, with horizontal interfaces |
 | `generate_mesh_3d` | 3D tetrahedra (HXT) of a box, optionally split by a sea floor |
 | `read_mesh`, `read_triangulation`, `read_tetrahedra` | vertices and cells of a mesh file |
-| `count_kmv_dofs` | KMV DOFs from FIAT's element, degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
+| `count_dofs` | DOFs of any FIAT element family (FIAT names, or Firedrake's `"CG"`, `"DG"`, `"KMV"`) and degree |
+| `count_kmv_dofs` | the same for KMV: degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
 | `mean_edge_lengths`, `local_mesh_size` | element size, and its sampling on a grid |
-| `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the KMV budget |
+| `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the DOF budget of an element (KMV by default) |
 
 ## Tests
 
@@ -177,8 +184,8 @@ make test
 
 `tests/test_*.py` test each module (the generation tests need gmsh).
 `tests/test_firedrake.py` loads the meshes in Firedrake and checks what the
-solver sees: the dimension of the KMV spaces against `count_kmv_dofs`, the
-boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
+solver sees: the dimension of the KMV, Lagrange and DG spaces against
+`count_dofs`, the boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
 It is skipped where Firedrake is not installed; to run it, use the Python of
 a Firedrake installation:
 
@@ -186,14 +193,14 @@ a Firedrake installation:
 /path/to/venv-firedrake/bin/python -m pytest tests/test_firedrake.py -v
 ```
 
-`tests/regression/` compares kmvmesh with frozen copies of the code it
+`tests/regression/` compares femwavemesh with frozen copies of the code it
 replaces (`tests/regression/legacy/`): spyro's 2D generator and size laws,
 the CPW refinement near sources, and the 3D Salt generators. Each case asks
 for the same `.msh` (SHA-256) and the same arrays. The old local size needs
 matplotlib, as it did; the 3D cases need the Salt models:
 
 ```bash
-KMVMESH_SALT3D_DATA=/path/to/data make test-regression
+FEMWAVEMESH_SALT3D_DATA=/path/to/data make test-regression
 ```
 
 with `salt_s250_x6p9_y4p4_d2p4.npz` and `salt_true_x6p6_y4p1_d2p7.npz` in
@@ -201,7 +208,7 @@ that directory. Cases whose requirements are missing are skipped.
 
 ## License
 
-kmvmesh is distributed under the GNU Lesser General Public License v3 or
+femwavemesh is distributed under the GNU Lesser General Public License v3 or
 later (LGPLv3+), the license of [spyro](https://github.com/NDF-Poli-USP/spyro),
 from which most of its code comes. See `LICENSE`.
-# kmvmesh
+# femwavemesh

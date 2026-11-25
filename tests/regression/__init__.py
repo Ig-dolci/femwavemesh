@@ -1,1 +1,1 @@
-"""Regression tests: kmvmesh against the code it replaces."""
+"""Regression tests: femwavemesh against the code it replaces."""

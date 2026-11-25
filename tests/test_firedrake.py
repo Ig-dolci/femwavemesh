@@ -1,6 +1,6 @@
 """The meshes as Firedrake reads them: KMV spaces, markers and interfaces.
 
-kmvmesh does not depend on Firedrake; these tests check that what it
+femwavemesh does not depend on Firedrake; these tests check that what it
 promises (DOF counts, boundary markers, conforming interfaces) is what the
 solver sees once it loads the ``.msh`` file. They are skipped where Firedrake
 is not installed.
@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import kmvmesh
-from kmvmesh import (BOTTOM, SEAFLOOR, TOP, X_MAX, X_MIN, Y_MAX, Y_MIN,
-                     FacetedSurface, UniformSize)
+import femwavemesh
+from femwavemesh import (BOTTOM, SEAFLOOR, TOP, X_MAX, X_MIN, Y_MAX, Y_MIN,
+                         FacetedSurface, UniformSize)
 
 from .test_generate import BOX, DOMAIN, INTERFACE, bumpy_floor, cpw_size
 
@@ -36,8 +36,8 @@ def flat(tmp_path_factory: pytest.TempPathFactory) -> Path:
     pathlib.Path
         The mesh file.
     """
-    return kmvmesh.generate_mesh(tmp_path_factory.mktemp("flat") / "flat.msh", DOMAIN,
-                                 cpw_size(3.0), [INTERFACE])
+    return femwavemesh.generate_mesh(tmp_path_factory.mktemp("flat") / "flat.msh", DOMAIN,
+                                     cpw_size(3.0), [INTERFACE])
 
 
 @pytest.fixture(scope="module")
@@ -54,8 +54,8 @@ def solid(tmp_path_factory: pytest.TempPathFactory) -> Path:
     pathlib.Path
         The mesh file.
     """
-    return kmvmesh.generate_mesh_3d(tmp_path_factory.mktemp("solid") / "solid.msh", BOX,
-                                    UniformSize(0.15), bumpy_floor())
+    return femwavemesh.generate_mesh_3d(tmp_path_factory.mktemp("solid") / "solid.msh", BOX,
+                                        UniformSize(0.15), bumpy_floor())
 
 
 def floor_area(floor: FacetedSurface) -> float:
@@ -126,38 +126,50 @@ def separating_facets(mesh: "fd.MeshGeometry",
     return indicator
 
 
-@pytest.mark.parametrize("degree", range(1, 7))
-def test_kmv_dimension_2d(flat: Path, degree: int) -> None:
-    """``count_kmv_dofs`` is the dimension of Firedrake's KMV space, in 2D.
+#: Elements compared with Firedrake, as (family, degree), on triangles.
+ELEMENTS_2D = ([("KMV", k) for k in range(1, 7)] + [("CG", k) for k in range(1, 5)]
+               + [("DG", k) for k in range(0, 4)])
+#: The same on tetrahedra.
+ELEMENTS_3D = ([("KMV", k) for k in range(1, 4)] + [("CG", k) for k in range(1, 4)]
+               + [("DG", k) for k in range(0, 3)])
+
+
+@pytest.mark.parametrize("family, degree", ELEMENTS_2D)
+def test_dimension_2d(flat: Path, family: str, degree: int) -> None:
+    """``count_dofs`` is the dimension of Firedrake's space, in 2D.
 
     Parameters
     ----------
     flat : pathlib.Path
         2D mesh.
+    family : str
+        Firedrake's name of the element family.
     degree : int
-        KMV degree.
+        Element degree.
     """
     mesh = fd.Mesh(str(flat))
-    triangles = kmvmesh.read_triangulation(flat)[1]
-    assert fd.FunctionSpace(mesh, "KMV", degree).dim() == \
-        kmvmesh.count_kmv_dofs(triangles, degree)
+    triangles = femwavemesh.read_triangulation(flat)[1]
+    assert fd.FunctionSpace(mesh, family, degree).dim() == \
+        femwavemesh.count_dofs(triangles, family, degree)
 
 
-@pytest.mark.parametrize("degree", range(1, 4))
-def test_kmv_dimension_3d(solid: Path, degree: int) -> None:
-    """``count_kmv_dofs`` is the dimension of Firedrake's KMV space, in 3D.
+@pytest.mark.parametrize("family, degree", ELEMENTS_3D)
+def test_dimension_3d(solid: Path, family: str, degree: int) -> None:
+    """``count_dofs`` is the dimension of Firedrake's space, in 3D.
 
     Parameters
     ----------
     solid : pathlib.Path
         3D mesh.
+    family : str
+        Firedrake's name of the element family.
     degree : int
-        KMV degree.
+        Element degree.
     """
     mesh = fd.Mesh(str(solid))
-    tetrahedra = kmvmesh.read_tetrahedra(solid)[1]
-    assert fd.FunctionSpace(mesh, "KMV", degree).dim() == \
-        kmvmesh.count_kmv_dofs(tetrahedra, degree)
+    tetrahedra = femwavemesh.read_tetrahedra(solid)[1]
+    assert fd.FunctionSpace(mesh, family, degree).dim() == \
+        femwavemesh.count_dofs(tetrahedra, family, degree)
 
 
 def test_markers_and_interface_2d(flat: Path) -> None:

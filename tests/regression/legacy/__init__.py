@@ -1,4 +1,4 @@
-"""Frozen copies of the code kmvmesh replaces, the reference of the regression tests.
+"""Frozen copies of the code femwavemesh replaces, the reference of the regression tests.
 
 They are not part of the library and are not linted. Origins (paths in the
 ``fwi-adjoint-adaptivity`` project, as of 25/11/2026) and SHA-256 of the

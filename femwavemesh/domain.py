@@ -194,7 +194,7 @@ class FacetedSurface:
 
     Each cell of the regular ``(x, y)`` grid is split into two triangles by
     the diagonal from node ``(i, j)`` to node ``(i + 1, j + 1)``. A mesh made
-    by :func:`~kmvmesh.generate_mesh_3d` uses these triangles as faces, and a
+    by :func:`~femwavemesh.generate_mesh_3d` uses these triangles as faces, and a
     velocity model that switches at :meth:`depth_at` has its jump exactly on
     mesh faces.
 

@@ -1,9 +1,9 @@
 """Mesh generation with gmsh.
 
-:func:`generate_mesh` builds triangles of a :class:`~kmvmesh.RectangularDomain`
+:func:`generate_mesh` builds triangles of a :class:`~femwavemesh.RectangularDomain`
 (spyro's 2D meshes); :func:`generate_mesh_3d` builds tetrahedra of a
-:class:`~kmvmesh.BoxDomain` (the 3D Salt meshes). Both write gmsh format 2.2,
-with the boundary markers of :mod:`kmvmesh.domain`, and run gmsh in the
+:class:`~femwavemesh.BoxDomain` (the 3D Salt meshes). Both write gmsh format 2.2,
+with the boundary markers of :mod:`femwavemesh.domain`, and run gmsh in the
 calling process only: under MPI, call them on a single rank and share the
 file name.
 """
@@ -215,10 +215,10 @@ def generate_mesh_3d(
         Box to mesh.
     size : PointSize
         Target edge length (km) at a point, with its bounds
-        (:class:`~kmvmesh.UniformSize`, :class:`~kmvmesh.CPWSize`,
-        :class:`~kmvmesh.ScatteredSize`).
+        (:class:`~femwavemesh.UniformSize`, :class:`~femwavemesh.CPWSize`,
+        :class:`~femwavemesh.ScatteredSize`).
     seafloor : FacetedSurface, optional
-        Surface imposed as mesh faces (marker :data:`~kmvmesh.SEAFLOOR`),
+        Surface imposed as mesh faces (marker :data:`~femwavemesh.SEAFLOOR`),
         spanning the box laterally. ``None`` (the default) meshes the box
         alone.
     threads : int, optional
@@ -338,7 +338,7 @@ def _box_with_seafloor(gmsh: ModuleType, domain: BoxDomain,
     """Add the box split by a faceted sea floor (gmsh's geo kernel).
 
     The water and the rock are two volumes of the physical group ``1``; the
-    facets form the group :data:`~kmvmesh.SEAFLOOR`, and each side of the box
+    facets form the group :data:`~femwavemesh.SEAFLOOR`, and each side of the box
     is made of a water face and a rock face.
 
     Parameters

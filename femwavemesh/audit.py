@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .counting import count_kmv_dofs, entity_counts
+from .counting import KMV, count_dofs, count_kmv_dofs, element_family, entity_counts
 from .domain import FacetedSurface
 from .io import read_mesh
 
@@ -211,32 +211,43 @@ def audit_tetrahedra(points: np.ndarray, tetrahedra: np.ndarray,
 
 def audit_mesh(path: str | Path, degree: int,
                conforming_depths: Sequence[float] = (),
-               seafloor: FacetedSurface | None = None) -> dict:
-    """Metadata of a mesh file: hash, dimension, KMV budget and audit.
+               seafloor: FacetedSurface | None = None,
+               family: str = "KMV") -> dict:
+    """Metadata of a mesh file: hash, dimension, DOF budget and audit.
 
     Parameters
     ----------
     path : str or pathlib.Path
         A triangular (spyro ``(z, x)``) or tetrahedral gmsh mesh.
     degree : int
-        Degree of the KMV element of the budget.
+        Degree of the element of the budget.
     conforming_depths : sequence of float, optional
         Horizontal interfaces of a 2D mesh.
     seafloor : FacetedSurface, optional
         Interface of a 3D mesh.
+    family : str, optional
+        Element family of the budget, a FIAT name or a Firedrake short name
+        (see :func:`~femwavemesh.counting.element_family`). Default ``"KMV"``.
 
     Returns
     -------
     dict
-        ``path``, ``sha256``, ``dimension``, ``kmv_degree``, ``kmv_dofs``
-        (scalar space) and ``geometry``, the output of
-        :func:`audit_triangles` or :func:`audit_tetrahedra`.
+        ``path``, ``sha256``, ``dimension``, ``element`` (FIAT name),
+        ``degree``, ``dofs`` (one component) and ``geometry``, the output of
+        :func:`audit_triangles` or :func:`audit_tetrahedra`. For KMV, also
+        ``kmv_degree`` and ``kmv_dofs``, the keys of earlier records.
     """
     points, cells = read_mesh(path)
     dimension = points.shape[1]
     geometry = (audit_triangles(points, cells, conforming_depths) if dimension == 2
                 else audit_tetrahedra(points, cells, seafloor))
-    return {"path": str(path),
-            "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
-            "dimension": dimension, "kmv_degree": degree,
-            "kmv_dofs": count_kmv_dofs(cells, degree), "geometry": geometry}
+    element = element_family(family)
+    dofs = count_dofs(cells, element, degree)
+    record = {"path": str(path),
+              "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+              "dimension": dimension, "element": element, "degree": degree,
+              "dofs": dofs}
+    if element == KMV:
+        record.update(kmv_degree=degree, kmv_dofs=dofs)
+    record["geometry"] = geometry
+    return record

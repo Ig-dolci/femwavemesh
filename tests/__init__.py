@@ -1,1 +1,1 @@
-"""Tests of kmvmesh."""
+"""Tests of femwavemesh."""
