@@ -1,10 +1,11 @@
-"""kmvmesh against the 3D Salt generators, frozen in ``legacy/salt3d``.
+"""femwavemesh against the 3D Salt generators, frozen in ``legacy/salt3d``.
 
 The old scripts run as the campaign runs them, as programs in a temporary
-campaign layout, and kmvmesh builds the same mesh in process; the files must
+campaign layout, and femwavemesh builds the same mesh in process; the files must
 have the same SHA-256 and the audits the same values. The Salt models are
-not part of the repository: set ``KMVMESH_SALT3D_DATA`` to a directory with
-``salt_s250_x6p9_y4p4_d2p4.npz`` and ``salt_true_x6p6_y4p1_d2p7.npz``.
+not part of the repository: set ``FEMWAVEMESH_SALT3D_DATA`` to a directory with
+``salt_s250_x6p9_y4p4_d2p4.npz`` and ``salt_true_x6p6_y4p1_d2p7.npz``
+(``KMVMESH_SALT3D_DATA``, from the library's former name, is read too).
 """
 
 import hashlib
@@ -17,18 +18,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import kmvmesh
+import femwavemesh
 
 pytest.importorskip("gmsh")
 
 LEGACY = Path(__file__).parent / "legacy" / "salt3d"
 S250 = "salt_s250_x6p9_y4p4_d2p4.npz"
 TRUE = "salt_true_x6p6_y4p1_d2p7.npz"
-DATA = Path(os.environ.get("KMVMESH_SALT3D_DATA", "/nonexistent"))
+DATA = Path(os.environ.get("FEMWAVEMESH_SALT3D_DATA",
+                           os.environ.get("KMVMESH_SALT3D_DATA", "/nonexistent")))
 pytestmark = pytest.mark.skipif(not (DATA / S250).exists() or not (DATA / TRUE).exists(),
-                                reason="set KMVMESH_SALT3D_DATA to the Salt models")
+                                reason="set FEMWAVEMESH_SALT3D_DATA to the Salt models")
 #: The box of ``fundo_salt3d.py``: window plus the 0.3 km pad.
-BOX = kmvmesh.BoxDomain(x_min=6.6, x_max=8.6, y_min=4.1, y_max=6.1, z_min=-2.7, pad=0.3)
+BOX = femwavemesh.BoxDomain(x_min=6.6, x_max=8.6, y_min=4.1, y_max=6.1, z_min=-2.7, pad=0.3)
 FREQUENCY = 3.5
 WATER = 1.5
 
@@ -102,8 +104,8 @@ def legacy_value(campaign: Path, code: str) -> dict:
         return {key: data[key] for key in data.files}
 
 
-def model(case: str) -> tuple[kmvmesh.VelocityGrid3D, kmvmesh.FacetedSurface | None]:
-    """Build the velocity of a case with kmvmesh, as ``malha3d_matriz.Modelo`` does.
+def model(case: str) -> tuple[femwavemesh.VelocityGrid3D, femwavemesh.FacetedSurface | None]:
+    """Build the velocity of a case with femwavemesh, as ``malha3d_matriz.Modelo`` does.
 
     Parameters
     ----------
@@ -112,9 +114,9 @@ def model(case: str) -> tuple[kmvmesh.VelocityGrid3D, kmvmesh.FacetedSurface | N
 
     Returns
     -------
-    velocity : kmvmesh.VelocityGrid3D
+    velocity : femwavemesh.VelocityGrid3D
         The model.
-    seafloor : kmvmesh.FacetedSurface or None
+    seafloor : femwavemesh.FacetedSurface or None
         The sea floor of the true model.
     """
     with np.load(DATA / S250) as data:
@@ -122,36 +124,36 @@ def model(case: str) -> tuple[kmvmesh.VelocityGrid3D, kmvmesh.FacetedSurface | N
         vp = np.asarray(data["vp"], float)
         water_depth = data["water_depth_km"].astype(float)
     if case == "suavizado":
-        return kmvmesh.VelocityGrid3D(vp, x, y, depth), None
+        return femwavemesh.VelocityGrid3D(vp, x, y, depth), None
     with np.load(DATA / TRUE) as data:
         rock = np.asarray(data["vp_rocha"], float)
         sigma, spacing = float(data["fundo_sigma_km"]), float(data["fundo_passo_km"])
-    seafloor = kmvmesh.FacetedSurface.from_water_depth(water_depth, x, y, BOX, sigma, spacing)
-    return kmvmesh.VelocityGrid3D(rock, x, y, depth, fixed_layer=(seafloor, WATER)), seafloor
+    seafloor = femwavemesh.FacetedSurface.from_water_depth(water_depth, x, y, BOX, sigma, spacing)
+    return femwavemesh.VelocityGrid3D(rock, x, y, depth, fixed_layer=(seafloor, WATER)), seafloor
 
 
-def size_field(path: Path, velocity: kmvmesh.VelocityGrid3D) -> kmvmesh.ScatteredSize:
+def size_field(path: Path, velocity: femwavemesh.VelocityGrid3D) -> femwavemesh.ScatteredSize:
     """Write a varying size at scattered points as the campaign's field file.
 
     Parameters
     ----------
     path : pathlib.Path
         ``.npz`` with ``centroids`` and ``requested_h``.
-    velocity : kmvmesh.VelocityGrid3D
+    velocity : femwavemesh.VelocityGrid3D
         Model whose CPW size the field modulates.
 
     Returns
     -------
-    kmvmesh.ScatteredSize
-        The same field for kmvmesh.
+    femwavemesh.ScatteredSize
+        The same field for femwavemesh.
     """
     axes = (np.arange(6.6, 8.61, 0.1), np.arange(4.1, 6.11, 0.1), -np.arange(0.0, 2.71, 0.1))
     X, Y, Z = np.meshgrid(*axes, indexing="ij")
     points = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])
-    sizes = kmvmesh.cpw_size(velocity(*points.T), 2.0, FREQUENCY)
+    sizes = femwavemesh.cpw_size(velocity(*points.T), 2.0, FREQUENCY)
     sizes *= 1.0 + 0.3 * np.sin(3.0 * points[:, 0]) * np.cos(2.0 * points[:, 2])
     np.savez(path, centroids=points, requested_h=sizes)
-    return kmvmesh.ScatteredSize(points, sizes)
+    return femwavemesh.ScatteredSize(points, sizes)
 
 
 def digest(path: Path) -> str:
@@ -188,7 +190,7 @@ def test_matrix_mesh(campaign: Path, tmp_path: Path, case: str, kind: str) -> No
     """
     velocity, seafloor = model(case)
     if kind == "cpw":
-        size = kmvmesh.CPWSize(velocity, 2.0, FREQUENCY)
+        size = femwavemesh.CPWSize(velocity, 2.0, FREQUENCY)
         option = ["--C", repr(2.0)]
     else:
         size = size_field(tmp_path / "field.npz", velocity)
@@ -196,13 +198,13 @@ def test_matrix_mesh(campaign: Path, tmp_path: Path, case: str, kind: str) -> No
     old = tmp_path / "old" / "m.msh"
     run_legacy(campaign, "code3d/malha3d_matriz.py", "--caso", case, "--frequencia",
                f"{FREQUENCY:g}", "--saida", str(old), *option)
-    new = kmvmesh.generate_mesh_3d(tmp_path / "new" / "m.msh", BOX, size, seafloor)
+    new = femwavemesh.generate_mesh_3d(tmp_path / "new" / "m.msh", BOX, size, seafloor)
     assert digest(new) == digest(old)
     record = json.loads(old.with_suffix(".json").read_text())
-    audit = kmvmesh.audit_tetrahedra(*kmvmesh.read_tetrahedra(new), seafloor)
+    audit = femwavemesh.audit_tetrahedra(*femwavemesh.read_tetrahedra(new), seafloor)
     crossing = audit.pop("seafloor_crossing_tetrahedra", 0)
     assert audit == record["actual_geometry"]
-    assert kmvmesh.count_kmv_dofs(kmvmesh.read_tetrahedra(new)[1], 3) == record["dofs"]
+    assert femwavemesh.count_kmv_dofs(femwavemesh.read_tetrahedra(new)[1], 3) == record["dofs"]
     assert crossing == record.get("tetraedros_que_cruzam_o_fundo", 0) == 0
 
 
@@ -224,11 +226,11 @@ def test_uniform_mesh(campaign: Path, tmp_path: Path, case: str) -> None:
     old = tmp_path / "old.msh"
     run_legacy(campaign, "code/malhas_uniformes.py", "3d", "--caso", case, "--frequencia",
                f"{FREQUENCY:g}", "--c", "1.5", "--saida", str(old))
-    new = kmvmesh.generate_mesh_3d(tmp_path / "new.msh", BOX,
-                                   kmvmesh.UniformSize(v_min / (1.5 * FREQUENCY)), seafloor)
+    new = femwavemesh.generate_mesh_3d(tmp_path / "new.msh", BOX,
+                                       femwavemesh.UniformSize(v_min / (1.5 * FREQUENCY)), seafloor)
     assert digest(new) == digest(old)
     record = json.loads(old.with_suffix(".json").read_text())
-    audit = kmvmesh.audit_tetrahedra(*kmvmesh.read_tetrahedra(new), seafloor)
+    audit = femwavemesh.audit_tetrahedra(*femwavemesh.read_tetrahedra(new), seafloor)
     audit.pop("seafloor_crossing_tetrahedra", None)
     assert audit == record["geometria"]
 
@@ -272,7 +274,7 @@ out["log_law"] = np.clip(np.exp(np.clip(np.log(0.8) + forma, -700, 700)), hmin, 
             velocity(np.array([6.61, 7.3, 8.59]), np.array([4.2, 5.0, 6.0]),
                      np.array([-0.05, -1.0, -2.69])), old[case + "_probe"])
     with np.load(DATA / S250) as data:
-        surface = kmvmesh.FacetedSurface.from_water_depth(
+        surface = femwavemesh.FacetedSurface.from_water_depth(
             data["water_depth_km"].astype(float), data["x_km"].astype(float),
             data["y_km"].astype(float), BOX, 0.1, 0.1)
     for mine, theirs in ((surface.x, old["x"]), (surface.y, old["y"]),
@@ -280,7 +282,7 @@ out["log_law"] = np.clip(np.exp(np.clip(np.log(0.8) + forma, -700, 700)), hmin, 
         np.testing.assert_array_equal(mine, theirs)
     # The same law as the campaigns', to rounding: v4 multiplies the factors in
     # another order, matriz3d evaluates it in log form.
-    law = kmvmesh.SizeLaw(old["rho"], old["h"], 0.02, order=6.0)
+    law = femwavemesh.SizeLaw(old["rho"], old["h"], 0.02, order=6.0)
     law.set_floor(old["vp"], 5, 2.0, 1.25)
     np.testing.assert_allclose(law.size(0.8), old["law"], rtol=1e-14, atol=0.0)
     np.testing.assert_allclose(law.size(0.8), old["log_law"], rtol=1e-14, atol=0.0)

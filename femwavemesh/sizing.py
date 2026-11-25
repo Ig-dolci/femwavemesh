@@ -329,7 +329,7 @@ class AdaptiveSizeField(SizeLaw):
     ----------
     grid : VelocityGrid or None
         The size of the last :meth:`set_scale` as a grid that
-        :func:`~kmvmesh.generate_mesh` accepts; ``None`` before.
+        :func:`~femwavemesh.generate_mesh` accepts; ``None`` before.
 
     Raises
     ------

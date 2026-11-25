@@ -2,7 +2,7 @@
 
 gmsh is a dependency, but its Python module loads a shared library (and, on
 Linux, X and OpenGL libraries) that a headless environment may lack. The
-import is deferred to the functions that run gmsh, so ``import kmvmesh``
+import is deferred to the functions that run gmsh, so ``import femwavemesh``
 works everywhere and only meshing needs a working gmsh.
 """
 

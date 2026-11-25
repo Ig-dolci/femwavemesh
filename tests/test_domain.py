@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from kmvmesh import BoxDomain, FacetedSurface, RectangularDomain
+from femwavemesh import BoxDomain, FacetedSurface, RectangularDomain
 
 
 def test_rectangle_interior_and_grid() -> None:

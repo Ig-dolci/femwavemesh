@@ -227,7 +227,7 @@ def audit_mesh(path: str | Path, degree: int,
         Interface of a 3D mesh.
     family : str, optional
         Element family of the budget, a FIAT name or a Firedrake short name
-        (see :func:`~kmvmesh.counting.element_family`). Default ``"KMV"``.
+        (see :func:`~femwavemesh.counting.element_family`). Default ``"KMV"``.
 
     Returns
     -------

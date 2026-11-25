@@ -3,9 +3,9 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kmvmesh"
-version = "0.1.0"
-description = "Unstructured meshes and mesh-size laws for KMV wave solvers"
+name = "femwavemesh"
+version = "0.2.0"
+description = "Unstructured meshes and mesh-size laws for finite-element wave solvers"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GNU Lesser General Public License v3 or later (LGPLv3+)" }
@@ -21,7 +21,8 @@ test = ["pytest"]
 dev = ["pytest", "flake8", "ruff"]
 
 [tool.setuptools.packages.find]
-include = ["kmvmesh*"]
+# kmvmesh: the former name, an alias of femwavemesh kept for existing code.
+include = ["femwavemesh*", "kmvmesh*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

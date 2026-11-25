@@ -5,9 +5,9 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from kmvmesh import count_dofs, count_kmv_dofs, local_mesh_size, mean_edge_lengths
-from kmvmesh.counting import (element_family, entity_counts, entity_dofs, find_triangles,
-                              fused_difference)
+from femwavemesh import count_dofs, count_kmv_dofs, local_mesh_size, mean_edge_lengths
+from femwavemesh.counting import (element_family, entity_counts, entity_dofs, find_triangles,
+                                  fused_difference)
 
 #: Dimension of KMV on one cell, by dimension and degree (FIAT).
 SPACE = {2: {1: 3, 2: 7, 3: 12, 4: 18, 5: 30, 6: 39}, 3: {1: 4, 2: 15, 3: 32}}
