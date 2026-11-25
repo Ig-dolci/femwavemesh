@@ -1,0 +1,339 @@
+{
+ "date": "2026-11-25",
+ "environment": {
+  "gmsh": "4.15.2",
+  "python": "3.13",
+  "note": "cloud container; FIAT (firedrake-fiat 2026.10.0) and matplotlib available for the legacy code"
+ },
+ "regression_old_code_vs_kmvmesh": [
+  {
+   "case": "2D CPW sem interface",
+   "old_sha256": "d44f69ae1cfcceb220859069b214a0928092e8e9eaeabef22018aee1eca022fb",
+   "new_sha256": "d44f69ae1cfcceb220859069b214a0928092e8e9eaeabef22018aee1eca022fb",
+   "same": true,
+   "cells": 151,
+   "vertices": 93,
+   "kmv4_dofs": 1728,
+   "conforming": true
+  },
+  {
+   "case": "2D CPW com interface",
+   "old_sha256": "652f4b08251eb342732535381ad874ca9f23914d809f97846662cbc947446233",
+   "new_sha256": "652f4b08251eb342732535381ad874ca9f23914d809f97846662cbc947446233",
+   "same": true,
+   "cells": 140,
+   "vertices": 87,
+   "kmv4_dofs": 1605,
+   "conforming": true
+  },
+  {
+   "case": "2D CPW duas interfaces, semente gmsh 1",
+   "old_sha256": "5b8661c663c1eb7e4c51e5bf5af85eb84b2518d7f600b85ecabe4fa95ef5a958",
+   "new_sha256": "5b8661c663c1eb7e4c51e5bf5af85eb84b2518d7f600b85ecabe4fa95ef5a958",
+   "same": true,
+   "cells": 149,
+   "vertices": 92,
+   "kmv4_dofs": 1706,
+   "conforming": true
+  },
+  {
+   "case": "2D uniforme com interface",
+   "old_sha256": "40326e4573f69a25949eb5c411472e3385c188729523508e275d9ead28850a6d",
+   "new_sha256": "40326e4573f69a25949eb5c411472e3385c188729523508e275d9ead28850a6d",
+   "same": true,
+   "cells": 532,
+   "vertices": 297,
+   "kmv4_dofs": 5973
+  },
+  {
+   "case": "2D perturbação (réplica 1)",
+   "old_sha256": "3aad0c8d4cd8657f1ef1dc7013399afd855cc13644768d0cfb5e0c37b3496645",
+   "new_sha256": "3aad0c8d4cd8657f1ef1dc7013399afd855cc13644768d0cfb5e0c37b3496645",
+   "same": true,
+   "cells": 151,
+   "vertices": 93,
+   "kmv4_dofs": 1728
+  },
+  {
+   "case": "2D refino perto das fontes (cpw_fontes)",
+   "old_sha256": "7f8b21733ab30d6221cfd6ae51e5a7b5f5ca3b6680ed71dc4aab2065d41f524b",
+   "new_sha256": "7f8b21733ab30d6221cfd6ae51e5a7b5f5ca3b6680ed71dc4aab2065d41f524b",
+   "same": true,
+   "cells": 155,
+   "vertices": 94,
+   "kmv4_dofs": 1768
+  },
+  {
+   "case": "2D campo adaptativo (semente 0, teto=False, tol=0.02)",
+   "old_sha256": "aa00269f810c1d1cfe06ee67ece641d196f02fce22dd750b1065ec216636abb1",
+   "new_sha256": "aa00269f810c1d1cfe06ee67ece641d196f02fce22dd750b1065ec216636abb1",
+   "same": true,
+   "cells": 182,
+   "vertices": 111,
+   "kmv4_dofs": 2079
+  },
+  {
+   "case": "2D campo adaptativo (semente 1, teto=False, tol=0.02)",
+   "old_sha256": "267b7f02be3bfa15b1d53aa0aaa8b98aebbec7cc87fec1395445776fe097df07",
+   "new_sha256": "267b7f02be3bfa15b1d53aa0aaa8b98aebbec7cc87fec1395445776fe097df07",
+   "same": true,
+   "cells": 176,
+   "vertices": 107,
+   "kmv4_dofs": 2009
+  },
+  {
+   "case": "2D campo adaptativo (semente 0, teto=True, tol=0.02)",
+   "old_sha256": "e32e121001acb0ac0593fbfe0528aae9840e044dbb17706e805e464cccff0801",
+   "new_sha256": "e32e121001acb0ac0593fbfe0528aae9840e044dbb17706e805e464cccff0801",
+   "same": true,
+   "cells": 177,
+   "vertices": 105,
+   "kmv4_dofs": 2010
+  },
+  {
+   "case": "2D campo adaptativo (semente 0, teto=False, tol=0.2)",
+   "old_sha256": "e4277b41f479c11d31df4f2f02d79ec6f2fccc7f383a7bafa9dd63301501cca7",
+   "new_sha256": "e4277b41f479c11d31df4f2f02d79ec6f2fccc7f383a7bafa9dd63301501cca7",
+   "same": true,
+   "cells": 182,
+   "vertices": 111,
+   "kmv4_dofs": 2079
+  },
+  {
+   "case": "3D malha3d_matriz suavizado C=2",
+   "old_sha256": "68219a974a557af66d07fbf69dd2123c84d48466e2acec47c15a60be5c87dcff",
+   "new_sha256": "68219a974a557af66d07fbf69dd2123c84d48466e2acec47c15a60be5c87dcff",
+   "same": true,
+   "cells": 1445,
+   "vertices": 487,
+   "kmv3_dofs": 20949,
+   "crossing": null
+  },
+  {
+   "case": "3D malha3d_matriz verdadeiro C=2",
+   "old_sha256": "a4b4b7e595350fa5d467ffe5aa9aaabf116e1c4f3ae9216219168f8ced3df683",
+   "new_sha256": "a4b4b7e595350fa5d467ffe5aa9aaabf116e1c4f3ae9216219168f8ced3df683",
+   "same": true,
+   "cells": 4059,
+   "vertices": 1047,
+   "kmv3_dofs": 54847,
+   "crossing": 0
+  },
+  {
+   "case": "3D malha3d_matriz suavizado campo",
+   "old_sha256": "02413594aeb1c924fc1f60ae89ae5160824912780edc8135692d587f49988900",
+   "new_sha256": "02413594aeb1c924fc1f60ae89ae5160824912780edc8135692d587f49988900",
+   "same": true,
+   "cells": 1610,
+   "vertices": 530,
+   "kmv3_dofs": 23218,
+   "crossing": null
+  },
+  {
+   "case": "3D malha3d_matriz verdadeiro campo",
+   "old_sha256": "33a3a1187ee8b93b5d74d6dd7ed1f5b4a860937e4bb9f478b9b7eae5274c933b",
+   "new_sha256": "33a3a1187ee8b93b5d74d6dd7ed1f5b4a860937e4bb9f478b9b7eae5274c933b",
+   "same": true,
+   "cells": 4307,
+   "vertices": 1095,
+   "kmv3_dofs": 58122,
+   "crossing": 0
+  },
+  {
+   "case": "3D malhas_uniformes suavizado c=1.5",
+   "old_sha256": "4c4536ee8f23317c413af273c2a84ba9061fdc43ed0ec41c81a2ff9f14ab6d8c",
+   "new_sha256": "4c4536ee8f23317c413af273c2a84ba9061fdc43ed0ec41c81a2ff9f14ab6d8c",
+   "same": true,
+   "cells": 1895,
+   "vertices": 544
+  },
+  {
+   "case": "3D malhas_uniformes verdadeiro c=1.5",
+   "old_sha256": "1c2b4db89e296d8f844a50a3738630da7837d3cfd924ad55280e1b73d4c47b55",
+   "new_sha256": "1c2b4db89e296d8f844a50a3738630da7837d3cfd924ad55280e1b73d4c47b55",
+   "same": true,
+   "cells": 4326,
+   "vertices": 1072
+  }
+ ],
+ "campaign_recorded_meshes_regenerated_by_kmvmesh": [
+  {
+   "case": "suavizado",
+   "record": "suavizado/pai/malha.json",
+   "kind": "cpw",
+   "recorded_sha256": "68219a974a557af66d07fbf69dd2123c84d48466e2acec47c15a60be5c87dcff",
+   "kmvmesh_sha256": "68219a974a557af66d07fbf69dd2123c84d48466e2acec47c15a60be5c87dcff",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 20949,
+   "recorded_dofs": 20949,
+   "crossing": 0
+  },
+  {
+   "case": "suavizado",
+   "record": "suavizado/adj_q6/tentativa_00.json",
+   "kind": "field",
+   "recorded_sha256": "f1d00762f7e06de6b30b86e5fa0cbaa146fc28b73623ae81d235705e3babafda",
+   "kmvmesh_sha256": "f1d00762f7e06de6b30b86e5fa0cbaa146fc28b73623ae81d235705e3babafda",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 28897,
+   "recorded_dofs": 28897,
+   "crossing": 0
+  },
+  {
+   "case": "suavizado",
+   "record": "suavizado/adj_q6/tentativa_01.json",
+   "kind": "field",
+   "recorded_sha256": "8040db0db95373f04a11aa629e3dd2c9fa16b2fc89913f5163ebb990c761191f",
+   "kmvmesh_sha256": "8040db0db95373f04a11aa629e3dd2c9fa16b2fc89913f5163ebb990c761191f",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 34184,
+   "recorded_dofs": 34184,
+   "crossing": 0
+  },
+  {
+   "case": "verdadeiro",
+   "record": "verdadeiro/adj_q6/tentativa_00.json",
+   "kind": "field",
+   "recorded_sha256": "3abf0f55fb294349b489d036c615a07a6fb1cde065c4bd6cd038c92790f62ac0",
+   "kmvmesh_sha256": "3abf0f55fb294349b489d036c615a07a6fb1cde065c4bd6cd038c92790f62ac0",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 66868,
+   "recorded_dofs": 66868,
+   "crossing": 0
+  },
+  {
+   "case": "verdadeiro",
+   "record": "verdadeiro/adj_q6/tentativa_01.json",
+   "kind": "field",
+   "recorded_sha256": "376695958f3820c1abb4f950665a2adc013edbfe0160d3a4e4fb322c2d85faf1",
+   "kmvmesh_sha256": "376695958f3820c1abb4f950665a2adc013edbfe0160d3a4e4fb322c2d85faf1",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 79368,
+   "recorded_dofs": 79368,
+   "crossing": 0
+  },
+  {
+   "case": "verdadeiro",
+   "record": "verdadeiro/adj_q6/tentativa_02.json",
+   "kind": "field",
+   "recorded_sha256": "9ae13db16cbf92019cbcb0f6d9d6932e0c27572b2b6f29fe178a37da3d7948e6",
+   "kmvmesh_sha256": "9ae13db16cbf92019cbcb0f6d9d6932e0c27572b2b6f29fe178a37da3d7948e6",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 84730,
+   "recorded_dofs": 84730,
+   "crossing": 0
+  },
+  {
+   "case": "verdadeiro",
+   "record": "verdadeiro/adj_q6/tentativa_03.json",
+   "kind": "field",
+   "recorded_sha256": "f258bf4ae20baa12f7c1c7dd6fa5b21a49ecfa85a444e62685d6c2f85115bef2",
+   "kmvmesh_sha256": "f258bf4ae20baa12f7c1c7dd6fa5b21a49ecfa85a444e62685d6c2f85115bef2",
+   "same_sha": true,
+   "same_audit": true,
+   "dofs": 86032,
+   "recorded_dofs": 86032,
+   "crossing": 0
+  }
+ ],
+ "spyro_methods_before_vs_after": [
+  {
+   "case": "automatic_loop.cpw_mesh seed 0",
+   "old_sha256": "58864c0e673f77c03c915a988dbe37c22559f834c7aa20ea350a4df164e3fe9e",
+   "new_sha256": "58864c0e673f77c03c915a988dbe37c22559f834c7aa20ea350a4df164e3fe9e",
+   "old_dofs": 3210,
+   "new_dofs": 3210,
+   "same": true
+  },
+  {
+   "case": "automatic_loop.adaptive_mesh seed 0",
+   "old_sha256": "f3e7175d45b360b35d59fd47d3aadd41bf724ef1b26d150b24d933dcd5bebbbf",
+   "new_sha256": "f3e7175d45b360b35d59fd47d3aadd41bf724ef1b26d150b24d933dcd5bebbbf",
+   "old_dofs": 4686,
+   "new_dofs": 4686,
+   "same": true
+  },
+  {
+   "case": "automatic_loop.cpw_mesh seed 1",
+   "old_sha256": "a8a0dfba19bfbd28314490b46d5a33ca830686bd45784571837d2239edd16db3",
+   "new_sha256": "a8a0dfba19bfbd28314490b46d5a33ca830686bd45784571837d2239edd16db3",
+   "old_dofs": 3456,
+   "new_dofs": 3456,
+   "same": true
+  },
+  {
+   "case": "automatic_loop.adaptive_mesh seed 1",
+   "old_sha256": "41bc3d2660c7f3d48ec9d8cce407111d27789f7053ca234152cc968df56bb804",
+   "new_sha256": "41bc3d2660c7f3d48ec9d8cce407111d27789f7053ca234152cc968df56bb804",
+   "old_dofs": 5240,
+   "new_dofs": 5240,
+   "same": true
+  },
+  {
+   "case": "cpw_fontes.SourceRefinedCPW.cpw_mesh seed 1",
+   "old_sha256": "787db94dfefdf7f0e4b657ee48a3a4f25d0ad0e734ba0f8efd40f1ac9f62c917",
+   "new_sha256": "787db94dfefdf7f0e4b657ee48a3a4f25d0ad0e734ba0f8efd40f1ac9f62c917",
+   "old_dofs": 3686,
+   "new_dofs": 3686,
+   "same": true
+  },
+  {
+   "case": "fwi_loop._cpw_mesh",
+   "old_sha256": "58864c0e673f77c03c915a988dbe37c22559f834c7aa20ea350a4df164e3fe9e",
+   "new_sha256": "58864c0e673f77c03c915a988dbe37c22559f834c7aa20ea350a4df164e3fe9e",
+   "old_dofs": 1605,
+   "new_dofs": 1605,
+   "same": true
+  },
+  {
+   "case": "fwi_loop._cpw_mesh with cap",
+   "old_sha256": "d3f13081d26a155df4ef6be697f7cca17d4e272ef17758bac4ac05293556988b",
+   "new_sha256": "d3f13081d26a155df4ef6be697f7cca17d4e272ef17758bac4ac05293556988b",
+   "old_dofs": 2303,
+   "new_dofs": 2303,
+   "same": true
+  },
+  {
+   "case": "fwi_loop cpw unified=False: _designed_mesh",
+   "old_sha256": "5b48d2569b1fa6698ecee5a3b37fb052ea1942a9ddc9241768c056da410764c1",
+   "new_sha256": "5b48d2569b1fa6698ecee5a3b37fb052ea1942a9ddc9241768c056da410764c1",
+   "old_dofs": 2435,
+   "new_dofs": 2435,
+   "same": true
+  },
+  {
+   "case": "fwi_loop cpw unified=True: _designed_mesh",
+   "old_sha256": "5b48d2569b1fa6698ecee5a3b37fb052ea1942a9ddc9241768c056da410764c1",
+   "new_sha256": "5b48d2569b1fa6698ecee5a3b37fb052ea1942a9ddc9241768c056da410764c1",
+   "old_dofs": 2435,
+   "new_dofs": 2435,
+   "same": true
+  },
+  {
+   "case": "fwi_loop gradient unified=False: _designed_mesh",
+   "old_sha256": "767c7359a652b584ca6c33eed6cf78463137514e6725bc738631b46f80261c2f",
+   "new_sha256": "767c7359a652b584ca6c33eed6cf78463137514e6725bc738631b46f80261c2f",
+   "old_dofs": 2453,
+   "new_dofs": 2453,
+   "same": true
+  },
+  {
+   "case": "fwi_loop gradient unified=True: _designed_mesh",
+   "old_sha256": "767c7359a652b584ca6c33eed6cf78463137514e6725bc738631b46f80261c2f",
+   "new_sha256": "767c7359a652b584ca6c33eed6cf78463137514e6725bc738631b46f80261c2f",
+   "old_dofs": 2453,
+   "new_dofs": 2453,
+   "same": true
+  },
+  {
+   "case": "dof_calibration == dofs / float((h ** -2).sum() * s ** 2)",
+   "same": true
+  }
+ ]
+}
