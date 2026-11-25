@@ -7,7 +7,7 @@ from a target edge length: uniform cells per wavelength, an adaptive law of a
 refinement density with a degree-of-freedom budget, refinement around point
 sources and smooth perturbations for replicas. It reads the meshes back,
 samples their local size, counts their KMV degrees of freedom and audits
-their geometry and conformity. It depends on numpy, scipy and gmsh only.
+their geometry and conformity. It depends on numpy, scipy, gmsh and FIAT only.
 """
 
 from .audit import audit_mesh, audit_tetrahedra, audit_triangles

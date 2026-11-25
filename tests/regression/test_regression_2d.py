@@ -3,7 +3,7 @@
 Each case builds the same mesh with the old code and with kmvmesh and asks
 for the same file (SHA-256), the same vertices and triangles and the same
 intermediate arrays, bit for bit. The local mesh size of the old code needs
-matplotlib, its DOF count FIAT; the cases that use them are skipped without.
+matplotlib; the cases that use it are skipped without.
 """
 
 import hashlib
@@ -329,7 +329,6 @@ def test_adaptive_mesh(tmp_path: Path, seed: int, capped: bool, tolerance: float
         Relative tolerance of the budget (0.2 stops before the last attempt).
     """
     pytest.importorskip("matplotlib")
-    pytest.importorskip("FIAT")
     z, x, v = two_layer()
     Z, X = np.meshgrid(z, x, indexing="ij")
     current = kmvmesh.generate_mesh(
@@ -415,7 +414,6 @@ def test_kmv_counts(tmp_path: Path) -> None:
     tmp_path : pathlib.Path
         Output directory.
     """
-    pytest.importorskip("FIAT")
     triangles = kmvmesh.read_triangulation(cpw_mesh(tmp_path))[1]
     for degree in range(1, 7):
         assert kmvmesh.count_kmv_dofs(triangles, degree) == \

@@ -2,7 +2,7 @@
 
 `kmvmesh` generates the unstructured meshes of the KMV wave solvers (spyro and
 the 3D Salt campaigns) and holds the mesh-size laws that drive them. It
-depends on numpy, scipy and gmsh only. It returns a mesh as a gmsh `.msh` file
+depends on numpy, scipy, gmsh and FIAT only. It returns a mesh as a gmsh `.msh` file
 plus, on request, a metadata dictionary; loading the file (Firedrake) is the
 caller's job.
 
@@ -31,7 +31,7 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
 | `generate` | `generate_mesh` 2D triangles, structured background size, horizontal interfaces | spyro `mesh_generation` |
 | | `generate_mesh_3d` 3D tetrahedra (HXT), box or box split by a faceted sea floor | `malha3d_matriz.gerar`, `malhas_uniformes._caixa`, `_caixa_com_fundo` |
 | `io` | `read_triangulation`, `read_tetrahedra`, `read_mesh` (either, by the file's dimension) | spyro `mesh_generation`; new (3D) |
-| `counting` | `count_kmv_dofs` KMV 1..6 on triangles, 1..3 on tetrahedra (FIAT table, no FIAT import) | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3) |
+| `counting` | `count_kmv_dofs` KMV 1..6 on triangles, 1..3 on tetrahedra (DOFs per entity from `FIAT.KongMulderVeldhuizen`) | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3) |
 | | `mean_edge_lengths`, `local_mesh_size` (with `counting.find_triangles`, see below) | spyro `mesh_generation` |
 | `audit` | `audit_triangles`, `audit_tetrahedra`, `audit_mesh` geometry, entity counts, DOFs, interface conformity | `malhas_uniformes.malha_2d`; v4 `mesh_geometry.audit_tetrahedra` |
 
@@ -92,6 +92,5 @@ test meshes, including grid points on the interface and on the boundary.
 * `tests/regression/`: the library against frozen copies of the code it
   replaces (`tests/regression/legacy/`), comparing SHA-256 of the `.msh` and
   the node and element arrays. The 3D cases need the Salt models
-  (`KMVMESH_SALT3D_DATA`); the legacy DOF count needs FIAT and the legacy
-  local size needs matplotlib; each case is skipped when its requirement is
-  missing.
+  (`KMVMESH_SALT3D_DATA`) and the legacy local size needs matplotlib; each
+  case is skipped when its requirement is missing.
