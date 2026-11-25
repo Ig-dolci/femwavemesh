@@ -31,7 +31,7 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
 | `generate` | `generate_mesh` 2D triangles, structured background size, horizontal interfaces | spyro `mesh_generation` |
 | | `generate_mesh_3d` 3D tetrahedra (HXT), box or box split by a faceted sea floor | `malha3d_matriz.gerar`, `malhas_uniformes._caixa`, `_caixa_com_fundo` |
 | `io` | `read_triangulation`, `read_tetrahedra`, `read_mesh` (either, by the file's dimension) | spyro `mesh_generation`; new (3D) |
-| `counting` | `count_kmv_dofs` KMV 1..6 on triangles, 1..3 on tetrahedra (DOFs per entity from `FIAT.KongMulderVeldhuizen`) | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3) |
+| `counting` | `count_dofs` any FIAT element family and degree (DOFs per entity from FIAT, times the entity counts); `count_kmv_dofs` the same for KMV, 1..6 on triangles, 1..3 on tetrahedra | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3); generalized |
 | | `mean_edge_lengths`, `local_mesh_size` (with `counting.find_triangles`, see below) | spyro `mesh_generation` |
 | `audit` | `audit_triangles`, `audit_tetrahedra`, `audit_mesh` geometry, entity counts, DOFs, interface conformity | `malhas_uniformes.malha_2d`; v4 `mesh_geometry.audit_tetrahedra` |
 
@@ -114,8 +114,8 @@ libc++. kmvmesh does not try to reproduce that.
 
 * `tests/test_*.py`: unit tests of every module (gmsh needed for the
   generation tests).
-* `tests/test_firedrake.py`: the meshes loaded in Firedrake (KMV dimensions,
-  markers, interfaces as facets); Firedrake is a test requirement only, and
+* `tests/test_firedrake.py`: the meshes loaded in Firedrake (dimensions of
+  KMV, Lagrange and DG spaces, markers, interfaces as facets); Firedrake is a test requirement only, and
   the file is skipped without it.
 * `tests/regression/`: the library against frozen copies of the code it
   replaces (`tests/regression/legacy/`), comparing SHA-256 of the `.msh` and

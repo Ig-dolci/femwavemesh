@@ -1,7 +1,7 @@
 # kmvmesh
 
-Unstructured meshes and mesh-size laws for wave solvers with KMV
-(Kong-Mulder-Veldhuizen) mass-lumped elements.
+Unstructured meshes and mesh-size laws for finite-element wave solvers, such
+as those with KMV (Kong-Mulder-Veldhuizen) mass-lumped elements.
 
 kmvmesh writes gmsh meshes of a padded rectangle (triangles) or a padded box
 (tetrahedra), conforming to horizontal interfaces in 2D and to a faceted sea
@@ -15,7 +15,8 @@ floor in 3D, from a target edge length:
   replicas.
 
 It reads the meshes back, samples their local size on a grid, counts their
-KMV degrees of freedom and audits their geometry and conformity. It depends
+degrees of freedom for any FIAT element (KMV, Lagrange, discontinuous
+Lagrange, ...) and audits their geometry and conformity. It depends
 on numpy, scipy, gmsh and FIAT only: the solver (spyro, with Firedrake) loads the
 `.msh` file, and the refinement density comes from the solver too.
 
@@ -164,9 +165,10 @@ print(kmvmesh.audit_tetrahedra(*kmvmesh.read_tetrahedra(path), floor))
 | `generate_mesh` | 2D triangles from a size grid, with horizontal interfaces |
 | `generate_mesh_3d` | 3D tetrahedra (HXT) of a box, optionally split by a sea floor |
 | `read_mesh`, `read_triangulation`, `read_tetrahedra` | vertices and cells of a mesh file |
-| `count_kmv_dofs` | KMV DOFs from FIAT's element, degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
+| `count_dofs` | DOFs of any FIAT element family (FIAT names, or Firedrake's `"CG"`, `"DG"`, `"KMV"`) and degree |
+| `count_kmv_dofs` | the same for KMV: degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
 | `mean_edge_lengths`, `local_mesh_size` | element size, and its sampling on a grid |
-| `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the KMV budget |
+| `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the DOF budget of an element (KMV by default) |
 
 ## Tests
 
@@ -177,8 +179,8 @@ make test
 
 `tests/test_*.py` test each module (the generation tests need gmsh).
 `tests/test_firedrake.py` loads the meshes in Firedrake and checks what the
-solver sees: the dimension of the KMV spaces against `count_kmv_dofs`, the
-boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
+solver sees: the dimension of the KMV, Lagrange and DG spaces against
+`count_dofs`, the boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
 It is skipped where Firedrake is not installed; to run it, use the Python of
 a Firedrake installation:
 

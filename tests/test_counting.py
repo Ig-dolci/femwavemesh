@@ -1,12 +1,13 @@
-"""KMV counts, edge lengths, point location and local size."""
+"""DOF counts, edge lengths, point location and local size."""
 
 from fractions import Fraction
 
 import numpy as np
 import pytest
 
-from kmvmesh import count_kmv_dofs, local_mesh_size, mean_edge_lengths
-from kmvmesh.counting import entity_counts, find_triangles, fused_difference
+from kmvmesh import count_dofs, count_kmv_dofs, local_mesh_size, mean_edge_lengths
+from kmvmesh.counting import (element_family, entity_counts, entity_dofs, find_triangles,
+                              fused_difference)
 
 #: Dimension of KMV on one cell, by dimension and degree (FIAT).
 SPACE = {2: {1: 3, 2: 7, 3: 12, 4: 18, 5: 30, 6: 39}, 3: {1: 4, 2: 15, 3: 32}}
@@ -44,6 +45,53 @@ def test_unknown_degree() -> None:
         count_kmv_dofs(np.array([[0, 1, 2]]), 7)
     with pytest.raises(ValueError):
         count_kmv_dofs(np.array([[0, 1, 2, 3]]), 4)
+
+
+#: Degrees of freedom per vertex, edge, (face,) and interior, by family,
+#: dimension and degree (firedrake-fiat 2026.10.0).
+ENTITY_DOFS = {
+    ("Lagrange", 2, 2): (1, 1, 0), ("Lagrange", 2, 3): (1, 2, 1),
+    ("Kong-Mulder-Veldhuizen", 2, 2): (1, 1, 1), ("Kong-Mulder-Veldhuizen", 2, 3): (1, 2, 3),
+    ("Discontinuous Lagrange", 2, 0): (0, 0, 1), ("Discontinuous Lagrange", 2, 3): (0, 0, 10),
+    ("Lagrange", 3, 2): (1, 1, 0, 0), ("Lagrange", 3, 3): (1, 2, 1, 0),
+    ("Kong-Mulder-Veldhuizen", 3, 2): (1, 1, 1, 1),
+    ("Kong-Mulder-Veldhuizen", 3, 3): (1, 2, 3, 4),
+    ("Discontinuous Lagrange", 3, 3): (0, 0, 0, 20),
+}
+
+
+@pytest.mark.parametrize("family, dimension, degree", sorted(ENTITY_DOFS))
+def test_entity_dofs_of_common_elements(family: str, dimension: int, degree: int) -> None:
+    """FIAT's DOFs per entity for Lagrange, DG and KMV.
+
+    Parameters
+    ----------
+    family : str
+        FIAT name of the family.
+    dimension : int
+        Cell dimension.
+    degree : int
+        Element degree.
+    """
+    assert entity_dofs(dimension, family, degree) == ENTITY_DOFS[family, dimension, degree]
+
+
+def test_count_dofs_families_and_aliases() -> None:
+    """Lagrange shares vertex and edge DOFs, DG keeps them per cell."""
+    triangles = np.array([[0, 1, 2], [1, 3, 2]])
+    assert count_dofs(triangles, "Lagrange", 2) == 4 + 5
+    assert count_dofs(triangles, "CG", 2) == count_dofs(triangles, "P", 2) == 4 + 5
+    assert count_dofs(triangles, "DG", 1) == \
+        count_dofs(triangles, "Discontinuous Lagrange", 1) == 2 * 3
+    assert count_dofs(triangles, "KMV", 4) == count_kmv_dofs(triangles, 4)
+    assert element_family("KMV") == "Kong-Mulder-Veldhuizen"
+    assert element_family("Lagrange") == "Lagrange"
+
+
+def test_unknown_family() -> None:
+    """A family FIAT does not define is rejected."""
+    with pytest.raises(ValueError):
+        count_dofs(np.array([[0, 1, 2]]), "No such element", 1)
 
 
 def square() -> tuple[np.ndarray, np.ndarray]:

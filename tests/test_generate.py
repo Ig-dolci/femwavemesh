@@ -221,6 +221,11 @@ def test_read_mesh_and_audit_mesh(tmp_path: Path) -> None:
     assert record["kmv_dofs"] == kmvmesh.count_kmv_dofs(kmvmesh.read_triangulation(flat)[1], 4)
     assert record["sha256"] == hashlib.sha256(flat.read_bytes()).hexdigest()
     assert record["geometry"]["interface_conforming"]
+    assert record["element"] == "Kong-Mulder-Veldhuizen" and record["dofs"] == record["kmv_dofs"]
     record = kmvmesh.audit_mesh(solid, 3)
     assert record["dimension"] == 3
     assert record["kmv_dofs"] == record["geometry"]["KMV3_dofs_predicted"]
+    record = kmvmesh.audit_mesh(flat, 2, [INTERFACE], family="CG")
+    assert record["element"] == "Lagrange" and record["degree"] == 2
+    assert record["dofs"] == kmvmesh.count_dofs(kmvmesh.read_triangulation(flat)[1], "CG", 2)
+    assert "kmv_dofs" not in record and "kmv_degree" not in record
