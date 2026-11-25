@@ -45,9 +45,13 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
   names it used to define (`RectangularDomain`, `generate_mesh`,
   `read_triangulation`, `mean_edge_lengths`, `local_mesh_size`,
   `count_kmv_dofs`, `TOP`, `BOTTOM`, `X_MIN`, `X_MAX`).
-* `spyro/adaptivity/size_fields.py` keeps the densities (`gradient_density`,
-  `adjoint_density`) and re-exports `VelocityGrid`, `AdaptiveSizeField`,
-  `size_perturbation`.
+* `spyro/adaptivity/size_fields.py` keeps the refinement density,
+  `adjoint_density` (the cell indicators of the adjoint, DWR, estimate per
+  unit area; the velocity-gradient density was removed from spyro), and
+  re-exports `VelocityGrid`, `AdaptiveSizeField`, `size_perturbation`. The
+  2D regression tests still build a test density with the frozen
+  `gradient_density` of `tests/regression/legacy`: the size law takes any
+  density, and the test only compares the old and new code on it.
 * `spyro.adaptivity` exports the same names as before.
 * `automatic_loop` and `fwi_loop` import the mesh names from femwavemesh (the
   module-level names stay, so subclasses and monkeypatches keep working) and
@@ -58,7 +62,7 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
 
 ## What stays in spyro
 
-The indicator and the pilot, the densities, the loops and their policies
+The indicator and the pilot, the adjoint density, the loops and their policies
 (growth, stopping, the uniform-mesh rescale of `fwi_loop`), MPI (meshes are
 built on rank 0), mesh names and reports, and everything Firedrake.
 
