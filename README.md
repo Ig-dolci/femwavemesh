@@ -46,6 +46,59 @@ load FIAT.
 * gmsh format 2.2 (binary in 3D). gmsh runs in the calling process: under MPI,
   generate on one rank and share the file name.
 
+## How it works
+
+kmvmesh describes the problem (domain, interfaces and target size) and gmsh
+generates the mesh. kmvmesh then reads the file back to count its degrees of
+freedom and audit it; the solver loads the same `.msh` on its own.
+
+```mermaid
+flowchart TD
+    input["<b>Model and parameters</b><br/>velocity, frequency,<br/>cells per wavelength"]
+    domain["<b>Domain and interfaces</b><br/>domain.py, grids.py"]
+    size["<b>Target size h(x)</b><br/>sizing.py<br/>CPW, adaptive law,<br/>sources, replicas"]
+    gmsh["<b>gmsh writes the .msh</b><br/>generate.py<br/>2D: Frontal-Delaunay<br/>3D: HXT"]
+    check["<b>Read, count, audit</b><br/>io.py, counting.py<br/>audit.py"]
+    solver["<b>Solver loads the .msh</b><br/>spyro, Firedrake"]
+    input --> domain --> size --> gmsh
+    gmsh --> check
+    gmsh --> solver
+    classDef lib fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef mesher fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    classDef outside fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+    class domain,size,check lib
+    class gmsh mesher
+    class input,solver outside
+```
+
+An adaptive mesh goes through this path several times. `fit_to_budget`
+estimates the scale `alpha` of the size law from the budget of degrees of
+freedom, then corrects it until the mesh is within 2% of the target, building
+at most 6 meshes (the last one is kept if none is). The `build` callback,
+given by the caller, generates each mesh and counts its DOFs.
+
+```mermaid
+flowchart TD
+    current["<b>Current mesh, density</b><br/>density from the solver"]
+    law["<b>Adaptive size law</b><br/>SizeLaw: h_k, rho,<br/>floor, ceiling"]
+    scale["<b>First scale alpha</b><br/>dof_calibration<br/>scale_for"]
+    build["<b>build(law)</b><br/>gmsh meshes,<br/>kmvmesh counts DOFs"]
+    test{"DOFs within 2%<br/>of the target?"}
+    done["<b>New mesh</b><br/>back to the solver"]
+    fix["<b>Rescale alpha</b><br/>alpha *<br/>(N / N_target)^(1/d)"]
+    current --> law --> scale --> build --> test
+    test -- yes --> done
+    test -- no --> fix --> build
+    classDef lib fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef mesher fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    classDef outside fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+    class law,scale,test,fix lib
+    class build mesher
+    class current,done outside
+```
+
+Purple: kmvmesh; teal: gmsh; gray: outside the library.
+
 ## Examples
 
 A 2D mesh with 4 cells per wavelength and a sea floor at 0.45 km:
@@ -123,6 +176,15 @@ make test
 ```
 
 `tests/test_*.py` test each module (the generation tests need gmsh).
+`tests/test_firedrake.py` loads the meshes in Firedrake and checks what the
+solver sees: the dimension of the KMV spaces against `count_kmv_dofs`, the
+boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
+It is skipped where Firedrake is not installed; to run it, use the Python of
+a Firedrake installation:
+
+```bash
+/path/to/venv-firedrake/bin/python -m pytest tests/test_firedrake.py -v
+```
 
 `tests/regression/` compares kmvmesh with frozen copies of the code it
 replaces (`tests/regression/legacy/`): spyro's 2D generator and size laws,
