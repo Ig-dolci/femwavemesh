@@ -89,6 +89,9 @@ test meshes, including grid points on the interface and on the boundary.
 
 * `tests/test_*.py`: unit tests of every module (gmsh needed for the
   generation tests).
+* `tests/test_firedrake.py`: the meshes loaded in Firedrake (KMV dimensions,
+  markers, interfaces as facets); Firedrake is a test requirement only, and
+  the file is skipped without it.
 * `tests/regression/`: the library against frozen copies of the code it
   replaces (`tests/regression/legacy/`), comparing SHA-256 of the `.msh` and
   the node and element arrays. The 3D cases need the Salt models

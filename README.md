@@ -123,6 +123,15 @@ make test
 ```
 
 `tests/test_*.py` test each module (the generation tests need gmsh).
+`tests/test_firedrake.py` loads the meshes in Firedrake and checks what the
+solver sees: the dimension of the KMV spaces against `count_kmv_dofs`, the
+boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
+It is skipped where Firedrake is not installed; to run it, use the Python of
+a Firedrake installation:
+
+```bash
+/path/to/venv-firedrake/bin/python -m pytest tests/test_firedrake.py -v
+```
 
 `tests/regression/` compares kmvmesh with frozen copies of the code it
 replaces (`tests/regression/legacy/`): spyro's 2D generator and size laws,
