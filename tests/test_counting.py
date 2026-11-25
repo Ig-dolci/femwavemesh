@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from kmvmesh import count_kmv_dofs, local_mesh_size, mean_edge_lengths
-from kmvmesh.counting import KMV_ENTITY_DOFS, entity_counts, find_triangles
+from kmvmesh.counting import entity_counts, find_triangles
 
 #: Dimension of KMV on one cell, by dimension and degree (FIAT).
 SPACE = {2: {1: 3, 2: 7, 3: 12, 4: 18, 5: 30, 6: 39}, 3: {1: 4, 2: 15, 3: 32}}
@@ -42,16 +42,6 @@ def test_unknown_degree() -> None:
         count_kmv_dofs(np.array([[0, 1, 2]]), 7)
     with pytest.raises(ValueError):
         count_kmv_dofs(np.array([[0, 1, 2, 3]]), 4)
-
-
-def test_table_matches_fiat() -> None:
-    """The copied table is FIAT's, when FIAT is installed."""
-    FIAT = pytest.importorskip("FIAT")
-    for dimension, degrees in KMV_ENTITY_DOFS.items():
-        for degree, dofs in degrees.items():
-            element = FIAT.KongMulderVeldhuizen(FIAT.ufc_simplex(dimension), degree)
-            entity_dofs = element.entity_dofs()
-            assert dofs == tuple(len(entity_dofs[d][0]) for d in range(dimension + 1))
 
 
 def square() -> tuple[np.ndarray, np.ndarray]:

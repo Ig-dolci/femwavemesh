@@ -16,7 +16,7 @@ floor in 3D, from a target edge length:
 
 It reads the meshes back, samples their local size on a grid, counts their
 KMV degrees of freedom and audits their geometry and conformity. It depends
-on numpy, scipy and gmsh only: the solver (spyro, with Firedrake) loads the
+on numpy, scipy, gmsh and FIAT only: the solver (spyro, with Firedrake) loads the
 `.msh` file, and the refinement density comes from the solver too.
 
 The code was extracted from spyro's `spyro.adaptivity` and from the 3D Salt
@@ -26,12 +26,13 @@ campaigns. For the same inputs it writes the same meshes, byte for byte
 ## Installation
 
 ```bash
-python3 -m pip install -e /path/to/kmvmesh        # numpy, scipy, gmsh
+python3 -m pip install -e /path/to/kmvmesh        # numpy, scipy, gmsh, firedrake-fiat
 python3 -m pip install -e "/path/to/kmvmesh[dev]"  # plus pytest, flake8, ruff
 ```
 
-`import kmvmesh` does not import gmsh; only the functions that mesh or read
-meshes need it.
+`import kmvmesh` imports neither gmsh nor FIAT: the functions that mesh or
+read meshes load gmsh, and the KMV counts (and the audits that report them)
+load FIAT.
 
 ## Conventions
 
@@ -110,7 +111,7 @@ print(kmvmesh.audit_tetrahedra(*kmvmesh.read_tetrahedra(path), floor))
 | `generate_mesh` | 2D triangles from a size grid, with horizontal interfaces |
 | `generate_mesh_3d` | 3D tetrahedra (HXT) of a box, optionally split by a sea floor |
 | `read_mesh`, `read_triangulation`, `read_tetrahedra` | vertices and cells of a mesh file |
-| `count_kmv_dofs` | KMV DOFs, degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
+| `count_kmv_dofs` | KMV DOFs from FIAT's element, degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
 | `mean_edge_lengths`, `local_mesh_size` | element size, and its sampling on a grid |
 | `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the KMV budget |
 
@@ -127,8 +128,7 @@ make test
 replaces (`tests/regression/legacy/`): spyro's 2D generator and size laws,
 the CPW refinement near sources, and the 3D Salt generators. Each case asks
 for the same `.msh` (SHA-256) and the same arrays. The old local size needs
-matplotlib and the old DOF count needs FIAT, as they did; the 3D cases need
-the Salt models:
+matplotlib, as it did; the 3D cases need the Salt models:
 
 ```bash
 KMVMESH_SALT3D_DATA=/path/to/data make test-regression
