@@ -3,8 +3,7 @@
 The KMV (Kong-Mulder-Veldhuizen) mass-lumped elements put a fixed number of
 degrees of freedom on each vertex, edge, face and cell interior, so the
 dimension of the scalar space follows from the entity counts of the mesh.
-The table is FIAT's (``FIAT.KongMulderVeldhuizen``, firedrake-fiat
-2026.10.0), copied so that counting needs no FIAT.
+The numbers per entity are those of FIAT's ``KongMulderVeldhuizen`` element.
 """
 
 from __future__ import annotations
@@ -13,13 +12,40 @@ from itertools import combinations
 
 import numpy as np
 
-#: KMV degrees of freedom per vertex, edge, (face,) and cell interior, by
-#: cell dimension and degree.
-KMV_ENTITY_DOFS = {
-    2: {1: (1, 0, 0), 2: (1, 1, 1), 3: (1, 2, 3), 4: (1, 3, 6),
-        5: (1, 4, 15), 6: (1, 5, 21)},
-    3: {1: (1, 0, 0, 0), 2: (1, 1, 1, 1), 3: (1, 2, 3, 4)},
-}
+
+def kmv_entity_dofs(dimension: int, degree: int) -> tuple[int, ...]:
+    """KMV degrees of freedom per vertex, edge, (face,) and cell interior.
+
+    Parameters
+    ----------
+    dimension : int
+        Dimension of the simplex: 2 for triangles, 3 for tetrahedra.
+    degree : int
+        Polynomial degree of the KMV element.
+
+    Returns
+    -------
+    tuple of int
+        Degrees of freedom on each entity of dimension 0 to ``dimension``,
+        from ``FIAT.KongMulderVeldhuizen``.
+
+    Raises
+    ------
+    ImportError
+        If FIAT is not installed.
+    ValueError
+        If FIAT has no KMV element of that degree on those simplices.
+    """
+    # Deferred: importing FIAT takes about two seconds.
+    import FIAT
+
+    try:
+        element = FIAT.KongMulderVeldhuizen(FIAT.ufc_simplex(dimension), degree)
+    except NotImplementedError:
+        raise ValueError(f"No KMV element of degree {degree} on "
+                         f"{dimension}D simplices.") from None
+    entity_dofs = element.entity_dofs()
+    return tuple(len(entity_dofs[d][0]) for d in range(dimension + 1))
 
 
 def entity_counts(cells: np.ndarray) -> tuple[int, ...]:
@@ -64,15 +90,12 @@ def count_kmv_dofs(cells: np.ndarray, degree: int) -> int:
 
     Raises
     ------
+    ImportError
+        If FIAT is not installed.
     ValueError
         If there is no KMV element of that degree on those cells.
     """
-    dimension = np.shape(cells)[1] - 1
-    try:
-        per_entity = KMV_ENTITY_DOFS[dimension][degree]
-    except KeyError:
-        raise ValueError(f"No KMV element of degree {degree} on "
-                         f"{dimension}D simplices.") from None
+    per_entity = kmv_entity_dofs(np.shape(cells)[1] - 1, degree)
     return int(sum(dofs * count for dofs, count
                    in zip(per_entity, entity_counts(cells))))
 

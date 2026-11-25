@@ -13,6 +13,7 @@ dependencies = [
   "numpy",
   "scipy",
   "gmsh",
+  "firedrake-fiat",
 ]
 
 [project.optional-dependencies]
