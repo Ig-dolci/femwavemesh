@@ -45,9 +45,14 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
   names it used to define (`RectangularDomain`, `generate_mesh`,
   `read_triangulation`, `mean_edge_lengths`, `local_mesh_size`,
   `count_kmv_dofs`, `TOP`, `BOTTOM`, `X_MIN`, `X_MAX`).
-* `spyro/adaptivity/size_fields.py` keeps the densities (`gradient_density`,
-  `adjoint_density`) and re-exports `VelocityGrid`, `AdaptiveSizeField`,
-  `size_perturbation`.
+* `spyro/adaptivity/size_fields.py` keeps the refinement densities and
+  re-exports `VelocityGrid`, `AdaptiveSizeField`, `size_perturbation`. The
+  density in use is `adjoint_density`, the cell indicators of the adjoint
+  (DWR) estimate per unit area, which is `fwi_loop`'s default strategy.
+  `gradient_density`, of the velocity-gradient strategy, is still in the code
+  but no longer used. The 2D regression tests build a test density with the
+  frozen `gradient_density` of `tests/regression/legacy`: the size law takes
+  any density, and the test only compares the old and new code on it.
 * `spyro.adaptivity` exports the same names as before.
 * `automatic_loop` and `fwi_loop` import the mesh names from femwavemesh (the
   module-level names stay, so subclasses and monkeypatches keep working) and
