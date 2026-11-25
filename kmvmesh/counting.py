@@ -100,7 +100,7 @@ def mean_edge_lengths(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 
 
 def local_mesh_size(points: np.ndarray, triangles: np.ndarray,
-                    z: np.ndarray, x: np.ndarray) -> np.ndarray:
+                    z: np.ndarray, x: np.ndarray, *, fma: bool = False) -> np.ndarray:
     """Sample the local element size of a mesh on a regular grid.
 
     Each grid point takes the mean edge length of the triangle that contains
@@ -119,6 +119,9 @@ def local_mesh_size(points: np.ndarray, triangles: np.ndarray,
         Increasing grid depths, shape ``(nz,)``.
     x : numpy.ndarray
         Increasing grid positions, shape ``(nx,)``.
+    fma : bool, optional
+        Locate points as a matplotlib built with fused multiply-add does
+        (see :func:`find_triangles`).
 
     Returns
     -------
@@ -128,7 +131,7 @@ def local_mesh_size(points: np.ndarray, triangles: np.ndarray,
     from scipy.ndimage import distance_transform_edt
 
     sizes = mean_edge_lengths(points, triangles)
-    cell = find_triangles(points, triangles, z, x)
+    cell = find_triangles(points, triangles, z, x, fma=fma)
     h = np.where(cell >= 0, sizes[np.maximum(cell, 0)], np.nan)
     missing = np.isnan(h)
     if missing.any():
@@ -139,7 +142,8 @@ def local_mesh_size(points: np.ndarray, triangles: np.ndarray,
 
 
 def find_triangles(points: np.ndarray, triangles: np.ndarray, z: np.ndarray,
-                   x: np.ndarray, chunk: int = 2_000_000) -> np.ndarray:
+                   x: np.ndarray, chunk: int = 2_000_000, *,
+                   fma: bool = False) -> np.ndarray:
     """Triangle containing each point of a regular grid.
 
     The answer is the one of matplotlib's ``TrapezoidMapTriFinder`` on
@@ -147,11 +151,23 @@ def find_triangles(points: np.ndarray, triangles: np.ndarray, z: np.ndarray,
     (first coordinate ``z`` as abscissa) each edge is directed from its
     leftmost end (lowest abscissa, then lowest ordinate) to the other, and
     its orientation test is
-    :math:`(P - L)_1 (R - L)_2 - (P - L)_2 (R - L)_1`, exactly as there.
-    A point strictly inside a triangle takes it; a point on an edge takes the
-    triangle on the negative side of the test ("above" the edge) if there is
-    one, else the other; a point on a vertex takes the lowest-index triangle
-    around the vertex; a point on no triangle gets ``-1``.
+    :math:`a d - b c` with :math:`(a, b) = P - L` and :math:`(c, d) = R - L`,
+    exactly as there. A point is tested only against the edges whose span
+    in that left-to-right order holds it, and a point equal to a vertex is
+    caught before any test. A point strictly inside a triangle takes it; a
+    point on an edge takes the triangle on the negative side of the test
+    ("above" the edge) if there is one, else the other; a point on a vertex
+    takes the lowest-index triangle around the vertex; a point on no
+    triangle gets ``-1``.
+
+    The trifinder is compiled code, and whether its orientation test is
+    rounded twice or contracted into one fused multiply-add depends on the
+    build: x86-64 wheels round twice, the macOS arm64 wheels compute
+    ``fma(a, d, -(b * c))``. The two differ only for points on an edge (or
+    within rounding of one) that is neither horizontal nor vertical: rounded
+    twice, :math:`a d - b c` is often exactly zero and the point takes the
+    triangle above; fused, it has the sign of the rounding error of
+    :math:`b c` and the point goes to either side.
 
     Parameters
     ----------
@@ -165,6 +181,10 @@ def find_triangles(points: np.ndarray, triangles: np.ndarray, z: np.ndarray,
         Increasing grid positions, shape ``(nx,)``.
     chunk : int, optional
         Largest number of (point, triangle) candidates handled at once.
+    fma : bool, optional
+        Evaluate the orientation test as a fused multiply-add, like a
+        matplotlib built for arm64, instead of rounding both products, like
+        one built for x86-64 (the default).
 
     Returns
     -------
@@ -230,17 +250,58 @@ def find_triangles(points: np.ndarray, triangles: np.ndarray, z: np.ndarray,
                                               counts[block])
         iz = z_lo[t] + offset // n_x[t]
         ix = x_lo[t] + offset % n_x[t]
-        qz, qx = z[iz], x[ix]
+        qz, qx = z[iz][:, None], x[ix][:, None]
         lz, lx = points[left[t], 0], points[left[t], 1]
         rz, rx = points[right[t], 0], points[right[t], 1]
-        cross = ((qz[:, None] - lz) * (rx - lx) - (qx[:, None] - lx) * (rz - lz))
-        on = cross == 0.0
-        inside = np.where(above[t], cross < 0.0, cross > 0.0) | on
-        valid = inside.all(axis=1)
+        # Only the edges whose left-to-right span holds the point are tested.
+        spans = (((qz > lz) | ((qz == lz) & (qx > lx)))
+                 & ((qz < rz) | ((qz == rz) & (qx < rx))))
+        a, b = qz - lz, qx - lx
+        c, d = rz - lz, rx - lx
+        cross = fused_difference(a, d, b * c) if fma else a * d - b * c
+        on = (cross == 0.0) & spans
+        inside = np.where(above[t], cross < 0.0, cross > 0.0) | on | ~spans
+        valid = inside.all(axis=1) & spans.any(axis=1)
         answer = np.where(on.any(axis=1), edge_answer[t, np.argmax(on, axis=1)], t)
+        # A vertex is found by equality, before any orientation test.
         tz, tx = points[corners[t], 0], points[corners[t], 1]
-        at_vertex = (tz == qz[:, None]) & (tx == qx[:, None])
-        answer = np.where(at_vertex.any(axis=1),
+        at_vertex = (tz == qz) & (tx == qx)
+        on_vertex = at_vertex.any(axis=1)
+        answer = np.where(on_vertex,
                           vertex_answer[corners[t, np.argmax(at_vertex, axis=1)]], answer)
+        valid |= on_vertex
         cell[(iz * len(x) + ix)[valid]] = answer[valid]
     return cell.reshape(len(z), len(x))
+
+
+def fused_difference(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
+    """Compute ``a * b - c`` with the sign of ``fma(a, b, -c)``, elementwise.
+
+    numpy has no fused multiply-add, so ``a * b`` is split exactly into its
+    rounded value ``p`` and its error ``e`` (Dekker's product), and the
+    result is ``(p - c) + e``. Its sign is that of the exact ``a * b - c``:
+    when ``p`` and ``c`` are within a factor of two of each other ``p - c``
+    is exact (Sterbenz), otherwise ``|p - c| >= |p| / 2`` outweighs
+    ``|e| <= 2**-53 |p|``. The value itself may differ from the fused one
+    in the last bit, which the orientation test never reads.
+
+    Parameters
+    ----------
+    a, b : numpy.ndarray
+        Factors, small enough for their halves not to overflow
+        (``|a|, |b| < 2**996``).
+    c : numpy.ndarray
+        Subtrahend.
+
+    Returns
+    -------
+    numpy.ndarray
+        A number with the sign of ``a * b - c``, zero only when it is zero.
+    """
+    p = a * b
+    split = 134217729.0  # 2**27 + 1
+    a_big, b_big = split * a, split * b
+    a_hi, b_hi = a_big - (a_big - a), b_big - (b_big - b)
+    a_lo, b_lo = a - a_hi, b - b_hi
+    e = ((a_hi * b_hi - p) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo
+    return (p - c) + e

@@ -73,8 +73,33 @@ spyro's `local_mesh_size` located grid points with matplotlib's
 bounding box, orientation tests in the trifinder's canonical edge direction)
 and reproduces the trifinder's ties: a point on an edge takes the triangle
 "above" the edge in the trifinder's frame, a point on a vertex the
-lowest-index triangle around it. The regression tests compare both on the
-test meshes, including grid points on the interface and on the boundary.
+lowest-index triangle around it. Like the trifinder's search tree, a point is
+only tested against the edges whose left-to-right span holds it, and a vertex
+is matched by equality before any orientation test. The regression tests
+compare both on the test meshes, including grid points on the interface and
+on the boundary.
+
+matplotlib's answer on edges depends on its build. The orientation test
+`a*d - b*c` is compiled C++: x86-64 wheels round both products, while in
+the macOS arm64 wheels the compiler contracts it into a fused
+multiply-subtract, `fma(a, d, -(b*c))`. A grid point on a slanted edge often
+gives exactly zero when both products are rounded, and then takes the
+triangle above. With the fused form the result has the sign of the rounding
+error of `b*c`, so the point takes either triangle. Horizontal and vertical edges give exactly zero
+both ways. `find_triangles(..., fma=True)` (and `local_mesh_size(...,
+fma=True)`) reproduces the fused form, with the exact sign of
+`a*d - round(b*c)` from Dekker's error-free product. The default is the
+rounded form. `tests/test_counting.py` probes which form the installed
+matplotlib uses and compares against the matching mode. Found on
+2026-11-25: on an Apple Silicon Mac the old test failed at 78 such points;
+the fused mode agrees with matplotlib on all of them, and on ~460 000
+random stress points. The gmsh regression meshes are identical in both modes.
+
+One gap remains. For a point within an ulp or two of a vertex, but not on
+it, the trifinder's rounded orientation tests can contradict each other. Its
+answer then depends on the order of its search tree, which it builds from a
+`std::shuffle` of the edges, and `std::shuffle` differs between libstdc++ and
+libc++. kmvmesh does not try to reproduce that.
 
 ## Known numerical differences (documented, tested to rounding)
 
