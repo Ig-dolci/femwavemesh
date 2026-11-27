@@ -5,9 +5,9 @@ import math
 import numpy as np
 import pytest
 
-from femwavemesh import (AdaptiveSizeField, CPWSize, ScatteredSize, SizeLaw, UniformSize,
-                         VelocityGrid3D, cpw_size, dof_calibration, fit_to_budget,
-                         size_perturbation, source_refinement)
+from femwavemesh import (AdaptiveSizeField, CPWSize, MeshSize, ScatteredSize, SizeLaw,
+                         UniformSize, VelocityGrid3D, cpw_size, dof_calibration,
+                         fit_to_budget, size_perturbation, source_refinement)
 
 
 def test_cpw_size() -> None:
@@ -216,3 +216,28 @@ def test_point_sizes() -> None:
         ScatteredSize(points, np.array([0.1, 0.2, 0.2, 0.2, -0.4]))
     with pytest.raises(ValueError):
         ScatteredSize(points[:, :2], np.ones(5))
+
+
+def test_mesh_size() -> None:
+    """A size on triangles or tetrahedra: bounds, extent and validation."""
+    points = np.array([[-1.0, 0.0], [-1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [5.0, 5.0]])
+    triangles = np.array([[0, 1, 2], [0, 2, 3]])
+    sizes = np.array([0.1, 0.2, 0.3, 0.2, 9.0])
+    size = MeshSize(points, triangles, sizes)
+    assert size.dimension == 2 and size.bounds == (0.1, 9.0)
+    lower, upper = size.extent()  # the unused vertex is left out
+    np.testing.assert_array_equal(lower, [-1.0, 0.0])
+    np.testing.assert_array_equal(upper, [0.0, 1.0])
+    assert size.measure() == pytest.approx(1.0)
+    cube = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, -1]], float)
+    corner = MeshSize(cube, np.array([[0, 1, 2, 3]]), np.ones(4))
+    assert corner.dimension == 3 and corner.measure() == pytest.approx(1 / 6)
+    for bad in [(points, triangles[:, :2], sizes),          # cells of the wrong shape
+                (cube, triangles, np.ones(4)),               # triangles with 3D points
+                (points, triangles + 3, sizes),              # missing vertices
+                (points, triangles.astype(float), sizes),    # indices that are not integers
+                (points, triangles[:0], sizes),              # no cells
+                (points, triangles, sizes[:4]),              # sizes of the wrong length
+                (points, triangles, -sizes)]:                # sizes that are not positive
+        with pytest.raises(ValueError):
+            MeshSize(*bad)

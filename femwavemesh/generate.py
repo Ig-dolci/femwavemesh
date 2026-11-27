@@ -5,7 +5,8 @@
 :class:`~femwavemesh.BoxDomain` (the 3D Salt meshes). Both write gmsh format 2.2,
 with the boundary markers of :mod:`femwavemesh.domain`, and run gmsh in the
 calling process only: under MPI, call them on a single rank and share the
-file name.
+file name. Both also take a :class:`~femwavemesh.MeshSize`, a size on
+triangles or tetrahedra that gmsh reads as a background view.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from .domain import (BOTTOM, SEAFLOOR, TOP, X_MAX, X_MIN, Y_MAX, Y_MIN,
                      BoxDomain, FacetedSurface, RectangularDomain)
 from .grids import VelocityGrid
 from .io import TETRAHEDRON, zero_based
+from .sizing import MeshSize
 
 
 class PointSize(Protocol):
@@ -61,7 +63,7 @@ class PointSize(Protocol):
 def generate_mesh(
     path: str | Path,
     domain: RectangularDomain,
-    size: VelocityGrid,
+    size: VelocityGrid | MeshSize,
     conforming_depths: Sequence[float] = (),
     seed: int = 0,
     algorithm: int = 6,
@@ -76,10 +78,13 @@ def generate_mesh(
         Output ``.msh`` file (gmsh format 2.2).
     domain : RectangularDomain
         Domain to mesh.
-    size : VelocityGrid
-        Target edge length (km) on a regular ``(z, x)`` grid covering the
-        domain. gmsh interpolates it linearly as a structured background
-        field, without calling back into Python.
+    size : VelocityGrid or MeshSize
+        Target edge length (km), either on a regular ``(z, x)`` grid
+        covering the domain (gmsh's ``Structured`` background field) or at
+        the vertices of triangles covering it, in ``(z, x)`` (gmsh's
+        ``PostView`` background field; its bounds become
+        ``Mesh.MeshSizeMin`` and ``Mesh.MeshSizeMax``). gmsh interpolates
+        either linearly, without calling back into Python.
     conforming_depths : sequence of float, optional
         Depths of horizontal interfaces imposed as mesh edges.
     seed : int, optional
@@ -97,7 +102,8 @@ def generate_mesh(
     ImportError
         If gmsh is not installed.
     ValueError
-        If an interface depth is outside the domain.
+        If an interface depth is outside the domain, or a
+        :class:`~femwavemesh.MeshSize` is not made of triangles covering it.
     """
     gmsh = _gmsh.load("generate adaptive meshes")
     path = Path(path)
@@ -105,6 +111,8 @@ def generate_mesh(
     for depth in conforming_depths:
         if not domain.z_min < depth < domain.z_max:
             raise ValueError(f"Interface depth {depth} is outside the domain.")
+    if isinstance(size, MeshSize):
+        _check_covers(size, (domain.z_min, domain.x_min), (domain.z_max, domain.x_max))
 
     gmsh.initialize()
     try:
@@ -149,17 +157,80 @@ def generate_mesh(
         gmsh.option.setNumber("Mesh.Smoothing", 10)
         gmsh.option.setNumber("Mesh.RandomSeed", seed + 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
-        with tempfile.TemporaryDirectory() as folder:
-            field = gmsh.model.mesh.field.add("Structured")
-            gmsh.model.mesh.field.setString(
-                field, "FileName", str(_write_structured_size(size, Path(folder))))
-            gmsh.model.mesh.field.setNumber(field, "TextFormat", 1)
-            gmsh.model.mesh.field.setAsBackgroundMesh(field)
+        if isinstance(size, MeshSize):
+            size_min, size_max = size.bounds
+            gmsh.option.setNumber("Mesh.MeshSizeMin", size_min)
+            gmsh.option.setNumber("Mesh.MeshSizeMax", size_max)
+            _set_view_size(gmsh, size)
             gmsh.model.mesh.generate(2)
+        else:
+            with tempfile.TemporaryDirectory() as folder:
+                field = gmsh.model.mesh.field.add("Structured")
+                gmsh.model.mesh.field.setString(
+                    field, "FileName", str(_write_structured_size(size, Path(folder))))
+                gmsh.model.mesh.field.setNumber(field, "TextFormat", 1)
+                gmsh.model.mesh.field.setAsBackgroundMesh(field)
+                gmsh.model.mesh.generate(2)
         gmsh.write(str(path))
     finally:
         gmsh.finalize()
     return path
+
+
+def _check_covers(size: MeshSize, lower: Sequence[float], upper: Sequence[float]) -> None:
+    """Check that a mesh size has the domain's dimension and can cover it.
+
+    Parameters
+    ----------
+    size : MeshSize
+        The size.
+    lower : sequence of float
+        Smallest coordinates of the domain, in the order of ``size.points``.
+    upper : sequence of float
+        Largest coordinates of the domain, in the same order.
+
+    Raises
+    ------
+    ValueError
+        If the dimensions differ, the bounding box of the cells does not
+        contain the domain or their measure is smaller than the domain's.
+    """
+    if size.dimension != len(lower):
+        raise ValueError(f"A size on {'triangles' if size.dimension == 2 else 'tetrahedra'} "
+                         f"cannot size a {len(lower)}D domain.")
+    lower, upper = np.asarray(lower, float), np.asarray(upper, float)
+    low, high = size.extent()
+    if np.any(low > lower + 1e-9) or np.any(high < upper - 1e-9) \
+            or size.measure() < np.prod(upper - lower) * (1 - 1e-9):
+        raise ValueError("The cells of the mesh size must cover the domain.")
+
+
+def _set_view_size(gmsh: ModuleType, size: MeshSize) -> None:
+    """Make a mesh size the background size of the current gmsh model.
+
+    The size becomes a list-based view of scalar triangles (``ST``) or
+    tetrahedra (``SS``), and the ``PostView`` field of that view the
+    background mesh. In 2D, spyro's ``(z, x)`` are gmsh's first two
+    coordinates, as in :func:`generate_mesh`, and the third is 0.
+
+    Parameters
+    ----------
+    gmsh : types.ModuleType
+        The initialized gmsh module.
+    size : MeshSize
+        The size.
+    """
+    corners = size.points[size.cells]
+    if size.dimension == 2:
+        corners = np.concatenate([corners, np.zeros(corners.shape[:2] + (1,))], axis=2)
+    # Per cell: the x of its vertices, then their y, their z and the sizes.
+    data = np.concatenate([corners[:, :, 0], corners[:, :, 1], corners[:, :, 2],
+                           size.sizes[size.cells]], axis=1).ravel()
+    view = gmsh.view.add("size")
+    gmsh.view.addListData(view, "ST" if size.dimension == 2 else "SS", len(size.cells), data)
+    field = gmsh.model.mesh.field.add("PostView")
+    gmsh.model.mesh.field.setNumber(field, "ViewTag", view)
+    gmsh.model.mesh.field.setAsBackgroundMesh(field)
 
 
 def _write_structured_size(size: VelocityGrid, folder: Path) -> Path:
@@ -196,16 +267,16 @@ def _write_structured_size(size: VelocityGrid, folder: Path) -> Path:
 def generate_mesh_3d(
     path: str | Path,
     domain: BoxDomain,
-    size: PointSize,
+    size: PointSize | MeshSize,
     seafloor: FacetedSurface | None = None,
     threads: int = 1,
 ) -> Path:
     """Generate a tetrahedral mesh with gmsh and write it to a file.
 
     gmsh's HXT algorithm meshes the box (or the water and the rock of a box
-    split by ``seafloor``), asking ``size`` for the target edge length at
-    each point, with random seed 0. The file is gmsh format 2.2, binary,
-    written to a temporary name and renamed when complete.
+    split by ``seafloor``) with the target edge length of ``size``, with
+    random seed 0. The file is gmsh format 2.2, binary, written to a
+    temporary name and renamed when complete.
 
     Parameters
     ----------
@@ -213,10 +284,13 @@ def generate_mesh_3d(
         Output ``.msh`` file.
     domain : BoxDomain
         Box to mesh.
-    size : PointSize
-        Target edge length (km) at a point, with its bounds
+    size : PointSize or MeshSize
+        Target edge length (km). A point size
         (:class:`~femwavemesh.UniformSize`, :class:`~femwavemesh.CPWSize`,
-        :class:`~femwavemesh.ScatteredSize`).
+        :class:`~femwavemesh.ScatteredSize`) answers gmsh's size callback
+        point by point; a :class:`~femwavemesh.MeshSize`, on tetrahedra
+        covering the box, is gmsh's ``PostView`` background field. Their
+        bounds become ``Mesh.MeshSizeMin`` and ``Mesh.MeshSizeMax``.
     seafloor : FacetedSurface, optional
         Surface imposed as mesh faces (marker :data:`~femwavemesh.SEAFLOOR`),
         spanning the box laterally. ``None`` (the default) meshes the box
@@ -234,7 +308,9 @@ def generate_mesh_3d(
     ImportError
         If gmsh is not installed.
     ValueError
-        If the sea floor does not span the box or leaves it.
+        If the sea floor does not span the box or leaves it, or a
+        :class:`~femwavemesh.MeshSize` is not made of tetrahedra covering
+        the box.
     RuntimeError
         If gmsh made cells other than tetrahedra, or tetrahedra that cross
         the sea floor.
@@ -243,6 +319,9 @@ def generate_mesh_3d(
     path = Path(path)
     if seafloor is not None:
         _check_seafloor(domain, seafloor)
+    if isinstance(size, MeshSize):
+        _check_covers(size, (domain.x_min, domain.y_min, domain.z_min),
+                      (domain.x_max, domain.y_max, domain.z_max))
     size_min, size_max = size.bounds
     gmsh.initialize()
     try:
@@ -259,7 +338,10 @@ def generate_mesh_3d(
                            "Mesh.Binary": 1, "Mesh.MeshSizeMin": size_min,
                            "Mesh.MeshSizeMax": size_max}.items():
             gmsh.option.setNumber(key, value)
-        gmsh.model.mesh.setSizeCallback(lambda dim, tag, x, y, z, lc: size(x, y, z))
+        if isinstance(size, MeshSize):
+            _set_view_size(gmsh, size)
+        else:
+            gmsh.model.mesh.setSizeCallback(lambda dim, tag, x, y, z, lc: size(x, y, z))
         gmsh.model.mesh.generate(3)
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp.msh")

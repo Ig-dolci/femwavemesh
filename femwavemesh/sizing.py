@@ -23,6 +23,9 @@ uniform-CPW mesh with the same budget.
 Everything on a grid lives on a regular grid with one spacing, indexed like
 the caller's arrays. In 3D, gmsh asks for the size point by point:
 :class:`UniformSize`, :class:`CPWSize` and :class:`ScatteredSize` answer it.
+:class:`MeshSize`, a size at the vertices of triangles or tetrahedra, is
+handed to gmsh whole instead, and gmsh interpolates it without calling back
+into Python.
 """
 
 from __future__ import annotations
@@ -575,3 +578,97 @@ class ScatteredSize:
             ``(min(sizes), max(sizes))``.
         """
         return float(self.sizes.min()), float(self.sizes.max())
+
+
+class MeshSize:
+    r"""Mesh size at the vertices of a simplicial mesh, linear on each cell.
+
+    :func:`~femwavemesh.generate_mesh` and :func:`~femwavemesh.generate_mesh_3d`
+    hand it to gmsh as a post-processing view, the background field
+    ``PostView``, which gmsh interpolates in its own code. In 3D this avoids
+    the Python call per point of :class:`ScatteredSize` and :class:`CPWSize`
+    (the interpolation differs: linear on the cells here, a mean of
+    :math:`\log h` over four neighbours there). In 2D it takes a size defined
+    on a triangulation, such as the current mesh of an adaptive loop, without
+    resampling it on a grid.
+
+    The cells must cover the domain to mesh. The generators check that the
+    bounding box of their vertices contains the domain and that their total
+    area or volume is at least the domain's, not each point.
+
+    Parameters
+    ----------
+    points : numpy.ndarray
+        Vertices: shape ``(n, 2)`` in spyro's ``(z, x)`` for triangles,
+        ``(n, 3)`` in ``(x, y, z)`` for tetrahedra.
+    cells : numpy.ndarray
+        Zero-based vertex indices of the triangles, shape ``(m, 3)``, or of
+        the tetrahedra, shape ``(m, 4)``.
+    sizes : numpy.ndarray
+        Size at each vertex (km), finite and positive, shape ``(n,)``.
+
+    Attributes
+    ----------
+    dimension : int
+        2 for triangles, 3 for tetrahedra.
+
+    Raises
+    ------
+    ValueError
+        If the arrays have the wrong shapes, a cell refers to a missing
+        vertex or a size is not finite and positive.
+    """
+
+    def __init__(self, points: np.ndarray, cells: np.ndarray, sizes: np.ndarray) -> None:
+        points = np.asarray(points, float)
+        cells = np.asarray(cells)
+        sizes = np.asarray(sizes, float)
+        if points.ndim != 2 or points.shape[1] not in (2, 3) or cells.ndim != 2 \
+                or cells.shape[1] != points.shape[1] + 1 or len(cells) == 0:
+            raise ValueError("Expected points (n, 2) with triangles (m, 3), "
+                             "or points (n, 3) with tetrahedra (m, 4).")
+        if not np.issubdtype(cells.dtype, np.integer) or cells.min() < 0 \
+                or cells.max() >= len(points):
+            raise ValueError("The cells must hold indices of the points.")
+        if sizes.shape != (len(points),) or not (np.isfinite(sizes).all() and (sizes > 0).all()):
+            raise ValueError("Expected one finite positive size per point.")
+        self.points = points
+        self.cells = cells
+        self.sizes = sizes
+        self.dimension = points.shape[1]
+
+    @property
+    def bounds(self) -> tuple[float, float]:
+        """Smallest and largest size.
+
+        Returns
+        -------
+        tuple of float
+            ``(min(sizes), max(sizes))``.
+        """
+        return float(self.sizes.min()), float(self.sizes.max())
+
+    def extent(self) -> tuple[np.ndarray, np.ndarray]:
+        """Bounding box of the vertices of the cells.
+
+        Returns
+        -------
+        lower : numpy.ndarray
+            Smallest coordinates, one per axis.
+        upper : numpy.ndarray
+            Largest coordinates, one per axis.
+        """
+        used = self.points[np.unique(self.cells)]
+        return used.min(axis=0), used.max(axis=0)
+
+    def measure(self) -> float:
+        """Total area of the triangles, or volume of the tetrahedra.
+
+        Returns
+        -------
+        float
+            Sum of the cell measures.
+        """
+        corners = self.points[self.cells]
+        edges = corners[:, 1:] - corners[:, :1]
+        return float(np.abs(np.linalg.det(edges)).sum() / math.factorial(self.dimension))

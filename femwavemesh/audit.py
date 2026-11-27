@@ -1,8 +1,14 @@
-"""Geometry, topology and interface conformity of a mesh.
+r"""Geometry, topology, shape quality and interface conformity of a mesh.
 
 The audits read the cells as written (they do not trust the requested
-size): entity counts, measures, edge lengths, orientation and, for each
-interface, the cells that cross it. A conforming mesh has none.
+size): entity counts, measures, edge lengths, orientation, shape quality
+and, for each interface, the cells that cross it. A conforming mesh has none.
+
+The shape quality is the radius ratio :math:`d\,r/R` of each cell
+(:func:`radius_ratios`: 1 for the equilateral triangle and the regular
+tetrahedron, 0 for a flat cell) and its angles (:func:`cell_angles`: the
+angles of a triangle, the dihedral angles of a tetrahedron). The smallest
+inscribed radius bounds the time step of an explicit scheme.
 """
 
 from __future__ import annotations
@@ -89,6 +95,208 @@ def _check_shapes(points: np.ndarray, cells: np.ndarray,
         raise ValueError("Unknown vertex.")
 
 
+def _corners(points: np.ndarray, cells: np.ndarray) -> np.ndarray:
+    """Vertex coordinates of each triangle or tetrahedron.
+
+    Parameters
+    ----------
+    points : numpy.ndarray
+        Vertex coordinates, shape ``(n, 2)`` or ``(n, 3)``.
+    cells : numpy.ndarray
+        Vertex indices, shape ``(m, 3)`` or ``(m, 4)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates, shape ``(m, d + 1, d)``.
+
+    Raises
+    ------
+    ValueError
+        If the shapes do not match or an index is out of range.
+    """
+    points = np.asarray(points, dtype=float)
+    cells = np.asarray(cells)
+    if points.ndim != 2 or points.shape[1] not in (2, 3):
+        raise ValueError("Expected points (n, 2) or (n, 3).")
+    _check_shapes(points, cells, points.shape[1] + 1, points.shape[1])
+    return points[cells]
+
+
+def _inward_normals(p: np.ndarray) -> np.ndarray:
+    """Inward normals of the faces of tetrahedra.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Vertices of the tetrahedra, shape ``(m, 4, 3)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Normal of the face opposite each vertex, pointing to that vertex,
+        of length twice the face's area; shape ``(m, 4, 3)``. A flat
+        tetrahedron gets zero normals.
+    """
+    normals = []
+    for k in range(4):
+        a, b, c = (i for i in range(4) if i != k)
+        n = np.cross(p[:, b] - p[:, a], p[:, c] - p[:, a])
+        side = np.sign(np.einsum("ij,ij->i", n, p[:, k] - p[:, a]))
+        normals.append(n * side[:, np.newaxis])
+    return np.stack(normals, axis=1)
+
+
+def _radii(p: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    r"""Inscribed radius and radius ratio of triangles or tetrahedra.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Vertices, shape ``(m, 3, 2)`` or ``(m, 4, 3)``.
+
+    Returns
+    -------
+    inradius : numpy.ndarray
+        Radius :math:`r` of the inscribed circle or sphere.
+    ratio : numpy.ndarray
+        :math:`d\,r/R`, 0 for a flat cell.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if p.shape[1] == 3:
+            lengths = np.linalg.norm(p[:, [1, 2, 0]] - p, axis=2)
+            e1, e2 = p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]
+            area = 0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0])
+            half = lengths.sum(axis=1) / 2
+            # r = A / s and R = abc / (4 A), so 2 r / R = 8 A^2 / (s abc).
+            inradius = area / half
+            ratio = 8 * area**2 / (half * lengths.prod(axis=1))
+        else:
+            e1, e2, e3 = (p[:, k] - p[:, 0] for k in (1, 2, 3))
+            volume = np.abs(np.einsum("ij,ij->i", e1, np.cross(e2, e3))) / 6
+            surface = 0.5 * np.linalg.norm(_inward_normals(p), axis=2).sum(axis=1)
+            # R = |N| / (12 V) from the circumcentre; r = 3 V / S, so 3 r / R = 108 V^2 / (S |N|).
+            square = [np.einsum("ij,ij->i", e, e)[:, np.newaxis] for e in (e1, e2, e3)]
+            centre = (square[0] * np.cross(e2, e3) + square[1] * np.cross(e3, e1)
+                      + square[2] * np.cross(e1, e2))
+            inradius = 3 * volume / surface
+            ratio = 108 * volume**2 / (surface * np.linalg.norm(centre, axis=1))
+    return np.nan_to_num(inradius), np.nan_to_num(ratio, posinf=0.0)
+
+
+def radius_ratios(points: np.ndarray, cells: np.ndarray) -> np.ndarray:
+    r"""Radius ratio of each triangle or tetrahedron.
+
+    The ratio is :math:`d\,r/R`, with :math:`r` and :math:`R` the radii of
+    the inscribed and circumscribed circles (spheres) and :math:`d` the
+    dimension: 1 for the equilateral triangle and the regular tetrahedron,
+    decreasing to 0 for a flat cell, slivers included.
+
+    Parameters
+    ----------
+    points : numpy.ndarray
+        Vertex coordinates, shape ``(n, 2)`` (spyro's ``(z, x)``) or
+        ``(n, 3)``.
+    cells : numpy.ndarray
+        Vertex indices of the triangles ``(m, 3)`` or tetrahedra ``(m, 4)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        One ratio per cell, in ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If the shapes do not match or an index is out of range.
+    """
+    return _radii(_corners(points, cells))[1]
+
+
+def cell_angles(points: np.ndarray, cells: np.ndarray) -> np.ndarray:
+    """Angles of each triangle, or dihedral angles of each tetrahedron.
+
+    Parameters
+    ----------
+    points : numpy.ndarray
+        Vertex coordinates, shape ``(n, 2)`` (spyro's ``(z, x)``) or
+        ``(n, 3)``.
+    cells : numpy.ndarray
+        Vertex indices of the triangles ``(m, 3)`` or tetrahedra ``(m, 4)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Degrees. For triangles, shape ``(m, 3)``: the angles at the vertices
+        0, 1 and 2 (60 each for the equilateral triangle). For tetrahedra,
+        shape ``(m, 6)``: the dihedral angles at the edges (0, 1), (0, 2),
+        (0, 3), (1, 2), (1, 3) and (2, 3) (70.53 each for the regular
+        tetrahedron). A flat tetrahedron has angles 0.
+
+    Raises
+    ------
+    ValueError
+        If the shapes do not match or an index is out of range.
+    """
+    return _angles(_corners(points, cells))
+
+
+def _angles(p: np.ndarray) -> np.ndarray:
+    """Angles of triangles, or dihedral angles of tetrahedra, from their vertices.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Vertices, shape ``(m, 3, 2)`` or ``(m, 4, 3)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Degrees, shape ``(m, 3)`` or ``(m, 6)`` (see :func:`cell_angles`).
+    """
+    if p.shape[1] == 3:
+        u = p[:, [1, 2, 0]] - p
+        v = p[:, [2, 0, 1]] - p
+        sine = np.abs(u[..., 0] * v[..., 1] - u[..., 1] * v[..., 0])
+        return np.degrees(np.arctan2(sine, np.einsum("ijk,ijk->ij", u, v)))
+    normals = _inward_normals(p)
+    flat = ~np.all(np.linalg.norm(normals, axis=2) > 0, axis=1)
+    angles = []
+    for edge in combinations(range(4), 2):
+        k, m = (i for i in range(4) if i not in edge)
+        # The faces opposite k and m meet at the edge; their inward normals
+        # make the supplement of the dihedral angle.
+        angles.append(np.arctan2(np.linalg.norm(np.cross(normals[:, k], normals[:, m]), axis=1),
+                                 -np.einsum("ij,ij->i", normals[:, k], normals[:, m])))
+    return np.where(flat[:, np.newaxis], 0.0, np.degrees(np.stack(angles, axis=1)))
+
+
+def _quality(p: np.ndarray, angle_name: str) -> dict:
+    """Shape-quality entries of an audit.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Vertices of valid cells, shape ``(m, 3, 2)`` or ``(m, 4, 3)``.
+    angle_name : str
+        ``"angle"`` for triangles, ``"dihedral"`` for tetrahedra.
+
+    Returns
+    -------
+    dict
+        ``radius_ratio_min``, ``radius_ratio_mean``, ``radius_ratio_p1``
+        (1st percentile), ``<angle_name>_min_deg``, ``<angle_name>_max_deg``
+        and ``inradius_min_km``.
+    """
+    inradius, ratio = _radii(p)
+    angles = _angles(p)
+    return {"radius_ratio_min": float(ratio.min()), "radius_ratio_mean": float(ratio.mean()),
+            "radius_ratio_p1": float(np.percentile(ratio, 1)),
+            f"{angle_name}_min_deg": float(angles.min()),
+            f"{angle_name}_max_deg": float(angles.max()),
+            "inradius_min_km": float(inradius.min())}
+
+
 def audit_triangles(points: np.ndarray, triangles: np.ndarray,
                     conforming_depths: Sequence[float] = ()) -> dict:
     """Audit a triangulation in spyro's ``(z, x)`` coordinates.
@@ -108,10 +316,12 @@ def audit_triangles(points: np.ndarray, triangles: np.ndarray,
         Entity counts (``vertices``, ``edges``, ``triangles``), area
         (``area_km2``, ``minimum_area_km2``, ``maximum_area_km2``), edge
         lengths (``edge_min_km``, ``edge_mean_km``, ``edge_max_km``,
-        ``edge_std_km``), ``bounds_min`` and ``bounds_max``,
-        ``signed_area_counts``, ``crossing_triangles`` (per depth, a vertex
-        within 1e-9 km of the depth being on it) and
-        ``interface_conforming``.
+        ``edge_std_km``), shape quality (``radius_ratio_min``,
+        ``radius_ratio_mean``, ``radius_ratio_p1`` the 1st percentile,
+        ``angle_min_deg``, ``angle_max_deg``, ``inradius_min_km``),
+        ``bounds_min`` and ``bounds_max``, ``signed_area_counts``,
+        ``crossing_triangles`` (per depth, a vertex within 1e-9 km of the
+        depth being on it) and ``interface_conforming``.
 
     Raises
     ------
@@ -139,6 +349,7 @@ def audit_triangles(points: np.ndarray, triangles: np.ndarray,
                 maximum_area_km2=float(area.max()),
                 edge_min_km=float(lengths.min()), edge_mean_km=float(lengths.mean()),
                 edge_max_km=float(lengths.max()), edge_std_km=float(lengths.std()),
+                **_quality(p, "angle"),
                 bounds_min=p.reshape(-1, 2).min(0).tolist(),
                 bounds_max=p.reshape(-1, 2).max(0).tolist(),
                 signed_area_counts=dict(positive=int(np.sum(oriented > 0)),
@@ -151,8 +362,8 @@ def audit_tetrahedra(points: np.ndarray, tetrahedra: np.ndarray,
                      seafloor: FacetedSurface | None = None) -> dict:
     """Audit a tetrahedralization in ``(x, y, z)`` coordinates.
 
-    The keys are those of the 3D Salt campaigns' audit, so their records
-    stay comparable.
+    The keys include those of the 3D Salt campaigns' audit, so their records
+    stay comparable; the shape quality is new.
 
     Parameters
     ----------
@@ -169,7 +380,10 @@ def audit_tetrahedra(points: np.ndarray, tetrahedra: np.ndarray,
         Entity counts (``vertices``, ``edges``, ``faces``, ``tetrahedra``),
         ``KMV3_dofs_predicted``, volume (``volume_km3``,
         ``minimum_volume_km3``, ``maximum_volume_km3``), ``edge_min_km`` and
-        ``edge_max_km``, ``bounds_min`` and ``bounds_max``,
+        ``edge_max_km``, shape quality (``radius_ratio_min``,
+        ``radius_ratio_mean``, ``radius_ratio_p1`` the 1st percentile,
+        ``dihedral_min_deg``, ``dihedral_max_deg``, ``inradius_min_km``),
+        ``bounds_min`` and ``bounds_max``,
         ``signed_volume_counts``, ``all_cells_affine_tetrahedra``,
         ``interface_conforming`` and
         ``requested_size_is_not_edge_CPW_guarantee``; with a sea floor,
@@ -196,6 +410,7 @@ def audit_tetrahedra(points: np.ndarray, tetrahedra: np.ndarray,
                   volume_km3=float(volume.sum()), minimum_volume_km3=float(volume.min()),
                   maximum_volume_km3=float(volume.max()),
                   edge_min_km=float(lengths.min()), edge_max_km=float(lengths.max()),
+                  **_quality(p, "dihedral"),
                   bounds_min=p.reshape(-1, 3).min(0).tolist(),
                   bounds_max=p.reshape(-1, 3).max(0).tolist(),
                   signed_volume_counts=dict(positive=int(np.sum(oriented > 0)),

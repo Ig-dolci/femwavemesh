@@ -32,12 +32,15 @@ library writes the same mesh as the code it replaces (same SHA-256 of the
 | | `dof_calibration` DOFs per unit of `sum(h^-d) dV` | spyro loops (4 copies) |
 | | `fit_to_budget` scale of a law until a mesh meets a DOF target | spyro `automatic_loop.adaptive_mesh`, `fwi_loop._designed_mesh` |
 | | `UniformSize`, `CPWSize`, `ScatteredSize` 3D point sizes for gmsh's callback | `malhas_uniformes.malha_3d`, `malha3d_matriz.gerar`, `make_mesh3d` |
-| `generate` | `generate_mesh` 2D triangles, structured background size, horizontal interfaces | spyro `mesh_generation` |
-| | `generate_mesh_3d` 3D tetrahedra (HXT), box or box split by a faceted sea floor | `malha3d_matriz.gerar`, `malhas_uniformes._caixa`, `_caixa_com_fundo` |
+| | `MeshSize` size at the vertices of triangles or tetrahedra, gmsh's `PostView` background field (see below) | new |
+| `generate` | `generate_mesh` 2D triangles, structured background size (or a `MeshSize`), horizontal interfaces | spyro `mesh_generation`; `MeshSize` new |
+| | `generate_mesh_3d` 3D tetrahedra (HXT), box or box split by a faceted sea floor | `malha3d_matriz.gerar`, `malhas_uniformes._caixa`, `_caixa_com_fundo`; `MeshSize` new |
 | `io` | `read_triangulation`, `read_tetrahedra`, `read_mesh` (either, by the file's dimension) | spyro `mesh_generation`; new (3D) |
+| `export` | `write_grid_vtk`, `write_mesh_vtk` legacy VTK files of grids and meshes, numpy only, 2D as `(x, z, 0)` | new |
 | `counting` | `count_dofs` any FIAT element family and degree (DOFs per entity from FIAT, times the entity counts); `count_kmv_dofs` the same for KMV, 1..6 on triangles, 1..3 on tetrahedra | spyro `mesh_generation`; v4 `mesh_geometry` (KMV3); generalized |
 | | `mean_edge_lengths`, `local_mesh_size` (with `counting.find_triangles`, see below) | spyro `mesh_generation` |
 | `audit` | `audit_triangles`, `audit_tetrahedra`, `audit_mesh` geometry, entity counts, DOFs, interface conformity | `malhas_uniformes.malha_2d`; v4 `mesh_geometry.audit_tetrahedra` |
+| | `radius_ratios`, `cell_angles` shape quality, and its summary in the audits (`radius_ratio_*`, `angle_*`/`dihedral_*`, `inradius_min_km`) | new (see below) |
 
 ## What changes in spyro
 
@@ -109,6 +112,37 @@ it, the trifinder's rounded orientation tests can contradict each other. Its
 answer then depends on the order of its search tree, which it builds from a
 `std::shuffle` of the edges, and `std::shuffle` differs between libstdc++ and
 libc++. femwavemesh does not try to reproduce that.
+
+## Sizes on a mesh
+
+`MeshSize` hands gmsh a size at the vertices of triangles or tetrahedra as a
+list-based view (`ST` or `SS`) and makes its `PostView` field the background
+mesh, as a `.geo` script does with `Background Mesh View`. gmsh then
+interpolates the size in its own code. In 3D, the point sizes answer gmsh's
+size callback, a Python call per point. Measured on 2026-11-27 (gmsh 4.15.2):
+a 1 km cube with the same sizes at 3 375 points gave 21 509 tetrahedra in
+1.89 s with `ScatteredSize`, and 21 329 in 0.14 s as a view. The
+interpolation differs (linear on the cells, against the mean of `log h` over
+four neighbours), so `MeshSize` is a separate type: the point sizes and their
+meshes are unchanged.
+
+The generators check that the cells can cover the domain: their bounding box
+contains it and their total area or volume is at least its own. This catches
+`(x, z)` given for `(z, x)` and meshes of part of the domain, not a hole
+inside a larger mesh. What gmsh does outside the view is not relied on.
+
+## Shape quality
+
+The radius ratio `d r / R` is gmsh's `gamma`: on the test meshes the two
+agree to 1e-15. The audits add its minimum, mean and 1st percentile, the
+extreme angles (dihedral in 3D) and the smallest inscribed radius, which
+bounds the time step of an explicit scheme; the keys of earlier records are
+kept. The generation tests bound these with room to spare (2D: ratio above
+0.45, angles between 22 and 130 degrees; 3D: ratio above 0.15, dihedral
+angles between 7 and 165 degrees), against what gmsh 4.15.2 gives on them
+(2D: at least 0.73, 36.7 to 98.6 degrees; 3D: at least 0.26, 12.6 to 151.1
+degrees). The SHA-256 regressions say a mesh did not change; these say a
+changed mesh is still usable.
 
 ## Known numerical differences (documented, tested to rounding)
 
