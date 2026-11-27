@@ -16,6 +16,31 @@ DOMAIN = RectangularDomain(z_min=-1.0, x_min=0.0, x_max=1.2, pad=0.2)
 INTERFACE = -0.3
 BOX = BoxDomain(x_min=0.0, x_max=1.0, y_min=0.0, y_max=0.8, z_min=-0.6)
 
+#: Shape-quality bounds of the generated meshes, with room to spare. gmsh 4.15.2
+#: gives, on the meshes of these tests, radius ratios of at least 0.73 and angles
+#: from 36.7 to 98.6 degrees in 2D; radius ratios of at least 0.26 and dihedral
+#: angles from 12.6 to 151.1 degrees in 3D. Slivers and needles fall outside.
+QUALITY = {"radius_ratio_min": (0.45, 0.15), "angle_min_deg": (22.0, None),
+           "angle_max_deg": (130.0, None), "dihedral_min_deg": (None, 7.0),
+           "dihedral_max_deg": (None, 165.0)}
+
+
+def assert_good_shapes(audit: dict, dimension: int) -> None:
+    """Check the shape quality of an audited mesh against :data:`QUALITY`.
+
+    Parameters
+    ----------
+    audit : dict
+        Output of ``audit_triangles`` or ``audit_tetrahedra``.
+    dimension : int
+        2 or 3.
+    """
+    for key, bounds in QUALITY.items():
+        bound = bounds[dimension - 2]
+        if bound is not None:
+            assert (audit[key] < bound if key.endswith("max_deg") else audit[key] > bound), \
+                f"{key} = {audit[key]:.3f} (bound {bound})"
+
 
 def cpw_size(cpw: float, frequency: float = 5.0) -> VelocityGrid:
     """Uniform-CPW size of a two-layer model with the jump at ``INTERFACE``.
@@ -92,6 +117,7 @@ def test_markers_interface_and_size(tmp_path: Path) -> None:
     assert np.sum(np.isclose(points[:, 0], INTERFACE)) >= 5
     audit = femwavemesh.audit_triangles(points, triangles, [INTERFACE])
     assert audit["interface_conforming"] and audit["area_km2"] == pytest.approx(width * height)
+    assert_good_shapes(audit, 2)
     lengths = femwavemesh.mean_edge_lengths(points, triangles)
     above = points[triangles][:, :, 0].mean(axis=1) > INTERFACE
     assert np.median(lengths[above]) == pytest.approx(1.5 / 15.0, rel=0.15)
@@ -164,6 +190,7 @@ def test_box_markers_and_volume(tmp_path: Path) -> None:
     audit = femwavemesh.audit_tetrahedra(points, tetrahedra)
     assert audit["volume_km3"] == pytest.approx(0.48)
     assert audit["KMV3_dofs_predicted"] == femwavemesh.count_kmv_dofs(tetrahedra, 3)
+    assert_good_shapes(audit, 3)
 
 
 def test_box_with_seafloor(tmp_path: Path) -> None:
@@ -183,6 +210,7 @@ def test_box_with_seafloor(tmp_path: Path) -> None:
     audit = femwavemesh.audit_tetrahedra(points, tetrahedra, floor)
     assert audit["seafloor_crossing_tetrahedra"] == 0 and audit["interface_conforming"]
     assert audit["volume_km3"] == pytest.approx(0.48)
+    assert_good_shapes(audit, 3)
     assert np.sum(floor.side(points) == 0) >= len(floor.x) * len(floor.y)
 
 
@@ -229,3 +257,151 @@ def test_read_mesh_and_audit_mesh(tmp_path: Path) -> None:
     assert record["element"] == "Lagrange" and record["degree"] == 2
     assert record["dofs"] == femwavemesh.count_dofs(femwavemesh.read_triangulation(flat)[1], "CG", 2)
     assert "kmv_dofs" not in record and "kmv_degree" not in record
+
+
+def no_view_data(path: Path) -> bool:
+    """Tell whether a mesh file holds no post-processing data.
+
+    Parameters
+    ----------
+    path : pathlib.Path
+        Mesh file.
+
+    Returns
+    -------
+    bool
+        ``True`` if the file has no ``$NodeData``, ``$ElementData`` or view.
+    """
+    content = path.read_bytes()
+    return not any(key in content for key in (b"$NodeData", b"$ElementData", b"$View"))
+
+
+def test_mesh_size_2d(tmp_path: Path) -> None:
+    """A size on triangles meshes like the same size on a grid.
+
+    The size is linear in depth, so the grid (bilinear) and the triangles
+    (linear) give gmsh the same field.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
+    points, triangles = femwavemesh.read_triangulation(
+        femwavemesh.generate_mesh(tmp_path / "coarse.msh", DOMAIN, cpw_size(2.0)))
+
+    def law(z: np.ndarray) -> np.ndarray:
+        """Size linear in depth.
+
+        Parameters
+        ----------
+        z : numpy.ndarray
+            Depths.
+
+        Returns
+        -------
+        numpy.ndarray
+            Sizes (km).
+        """
+        return 0.04 + 0.08 * -z
+
+    z, x = DOMAIN.grid(0.01)
+    grid = VelocityGrid(np.repeat(law(z)[:, np.newaxis], len(x), axis=1), z[0], x[0], 0.01, 0.01)
+    on_grid = femwavemesh.generate_mesh(tmp_path / "grid.msh", DOMAIN, grid, [INTERFACE])
+    on_mesh = femwavemesh.generate_mesh(tmp_path / "mesh.msh", DOMAIN,
+                                        femwavemesh.MeshSize(points, triangles, law(points[:, 0])),
+                                        [INTERFACE])
+    assert no_view_data(on_mesh)
+    assert physical_measures(on_mesh, 1) == pytest.approx(physical_measures(on_grid, 1))
+    new_points, new_triangles = femwavemesh.read_triangulation(on_mesh)
+    grid_triangles = femwavemesh.read_triangulation(on_grid)[1]
+    assert len(new_triangles) == pytest.approx(len(grid_triangles), rel=0.05)
+    audit = femwavemesh.audit_triangles(new_points, new_triangles, [INTERFACE])
+    assert audit["interface_conforming"]
+    assert_good_shapes(audit, 2)
+    lengths = femwavemesh.mean_edge_lengths(new_points, new_triangles)
+    depth = new_points[new_triangles][:, :, 0].mean(axis=1)
+    for top, bottom in ((0.0, -0.2), (-0.8, -1.0)):
+        band = (depth < top) & (depth > bottom)
+        assert np.median(lengths[band]) == pytest.approx(law((top + bottom) / 2), rel=0.15)
+
+
+def test_mesh_size_3d(tmp_path: Path) -> None:
+    """A size on tetrahedra meshes like the same size at scattered points.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
+    points, tetrahedra = femwavemesh.read_tetrahedra(
+        femwavemesh.generate_mesh_3d(tmp_path / "coarse.msh", BOX, UniformSize(0.2)))
+    sizes = 0.06 + 0.1 * -points[:, 2]
+    on_mesh = femwavemesh.generate_mesh_3d(tmp_path / "mesh.msh", BOX,
+                                           femwavemesh.MeshSize(points, tetrahedra, sizes))
+    scattered = femwavemesh.generate_mesh_3d(tmp_path / "scattered.msh", BOX,
+                                             femwavemesh.ScatteredSize(points, sizes))
+    assert not (tmp_path / "mesh.tmp.msh").exists() and no_view_data(on_mesh)
+    assert physical_measures(on_mesh, 3) == {1: pytest.approx(0.48)}
+    new_points, new_tetrahedra = femwavemesh.read_tetrahedra(on_mesh)
+    reference = femwavemesh.read_tetrahedra(scattered)[1]
+    assert len(new_tetrahedra) == pytest.approx(len(reference), rel=0.1)
+    audit = femwavemesh.audit_tetrahedra(new_points, new_tetrahedra)
+    assert audit["volume_km3"] == pytest.approx(0.48)
+    assert_good_shapes(audit, 3)
+    floor = bumpy_floor()
+    split = femwavemesh.generate_mesh_3d(tmp_path / "floor.msh", BOX,
+                                         femwavemesh.MeshSize(points, tetrahedra, sizes), floor)
+    audit = femwavemesh.audit_tetrahedra(*femwavemesh.read_tetrahedra(split), floor)
+    assert audit["interface_conforming"] and audit["volume_km3"] == pytest.approx(0.48)
+    assert_good_shapes(audit, 3)
+
+
+def test_mesh_size_must_fit_the_domain(tmp_path: Path) -> None:
+    """A mesh size of the wrong dimension, or short of the domain, is rejected.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
+    points = np.array([[DOMAIN.z_min, DOMAIN.x_min], [DOMAIN.z_min, DOMAIN.x_max],
+                       [DOMAIN.z_max, DOMAIN.x_max], [DOMAIN.z_max, DOMAIN.x_min]])
+    triangles = np.array([[0, 1, 2], [0, 2, 3]])
+    whole = femwavemesh.MeshSize(points, triangles, np.full(4, 0.2))
+    half = femwavemesh.MeshSize(points * [0.5, 1.0], triangles, np.full(4, 0.2))
+    swapped = femwavemesh.MeshSize(points[:, ::-1], triangles, np.full(4, 0.2))  # (x, z)
+    cube = femwavemesh.MeshSize(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, -1]], float),
+                                np.array([[0, 1, 2, 3]]), np.full(4, 0.2))
+    for size in (half, swapped, cube):
+        with pytest.raises(ValueError):
+            femwavemesh.generate_mesh(tmp_path / "m.msh", DOMAIN, size)
+    for size in (whole, cube):  # triangles, and a tetrahedron short of the box
+        with pytest.raises(ValueError):
+            femwavemesh.generate_mesh_3d(tmp_path / "m.msh", BOX, size)
+
+
+def test_radius_ratio_is_gmsh_gamma(tmp_path: Path) -> None:
+    """``radius_ratios`` agrees with gmsh's own ``gamma`` quality, 2D and 3D.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
+    paths = {2: femwavemesh.generate_mesh(tmp_path / "flat.msh", DOMAIN, cpw_size(2.0),
+                                          [INTERFACE]),
+             3: femwavemesh.generate_mesh_3d(tmp_path / "solid.msh", BOX, UniformSize(0.3),
+                                             bumpy_floor())}
+    for dimension, path in paths.items():
+        gmsh.initialize()
+        try:
+            gmsh.option.setNumber("General.Terminal", 0)
+            gmsh.open(str(path))
+            tags, _ = gmsh.model.mesh.getElementsByType(2 if dimension == 2 else 4)
+            gamma = np.array(gmsh.model.mesh.getElementQualities(tags, "gamma"))
+        finally:
+            gmsh.finalize()
+        points, cells = femwavemesh.read_mesh(path)
+        np.testing.assert_allclose(femwavemesh.radius_ratios(points, cells), gamma,
+                                   rtol=0, atol=1e-12)

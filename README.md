@@ -14,9 +14,13 @@ floor in 3D, from a target edge length:
 * refinement around point sources and smooth perturbations for mesh
   replicas.
 
+gmsh takes the size on a regular grid, point by point (3D), or at the
+vertices of triangles or tetrahedra (`MeshSize`), such as the current mesh.
+
 It reads the meshes back, samples their local size on a grid, counts their
 degrees of freedom for any FIAT element (KMV, Lagrange, discontinuous
-Lagrange, ...) and audits their geometry and conformity. It depends
+Lagrange, ...), audits their geometry, shape quality and conformity, and writes size fields
+and meshes to VTK files for ParaView. It depends
 on numpy, scipy, gmsh and FIAT only: the solver (spyro, with Firedrake) loads the
 `.msh` file, and the refinement density comes from the solver too.
 
@@ -149,6 +153,21 @@ path = femwavemesh.generate_mesh_3d("salt.msh", box, femwavemesh.CPWSize(velocit
 print(femwavemesh.audit_tetrahedra(*femwavemesh.read_tetrahedra(path), floor))
 ```
 
+A new size given at the vertices of that mesh, which gmsh interpolates in
+its own code (no grid, no Python callback), and the files to look at in
+ParaView:
+
+```python
+points, cells = femwavemesh.read_tetrahedra(path)
+size = femwavemesh.MeshSize(points, cells, new_size)  # km, one value per vertex
+refined = femwavemesh.generate_mesh_3d("salt_new.msh", box, size, floor)
+femwavemesh.write_grid_vtk("vp.vtk", velocity, "vp")
+femwavemesh.write_mesh_vtk("size.vtk", points, cells, point_data={"size": size.sizes})
+new_points, new_cells = femwavemesh.read_tetrahedra(refined)
+femwavemesh.write_mesh_vtk("salt_new.vtk", new_points, new_cells,
+                           cell_data={"quality": femwavemesh.radius_ratios(new_points, new_cells)})
+```
+
 ## API
 
 | name | what it is |
@@ -167,13 +186,16 @@ print(femwavemesh.audit_tetrahedra(*femwavemesh.read_tetrahedra(path), floor))
 | `dof_calibration` | DOFs per unit of `sum(h^-d) dV` of a mesh |
 | `fit_to_budget` | rescale a law until its mesh meets a DOF target |
 | `UniformSize`, `CPWSize`, `ScatteredSize` | 3D point sizes for gmsh's size callback |
-| `generate_mesh` | 2D triangles from a size grid, with horizontal interfaces |
-| `generate_mesh_3d` | 3D tetrahedra (HXT) of a box, optionally split by a sea floor |
+| `MeshSize` | size at the vertices of triangles `(z, x)` or tetrahedra `(x, y, z)`, linear on each cell, interpolated by gmsh (background view); `bounds`, `extent`, `measure` |
+| `generate_mesh` | 2D triangles from a size grid or a `MeshSize`, with horizontal interfaces |
+| `generate_mesh_3d` | 3D tetrahedra (HXT) of a box, optionally split by a sea floor, from a point size or a `MeshSize` |
 | `read_mesh`, `read_triangulation`, `read_tetrahedra` | vertices and cells of a mesh file |
+| `write_grid_vtk`, `write_mesh_vtk` | VTK files (legacy, binary or ASCII) of a grid, or of triangles or tetrahedra with point and cell data; 2D is written as `(x, z, 0)` |
 | `count_dofs` | DOFs of any FIAT element family (FIAT names, or Firedrake's `"CG"`, `"DG"`, `"KMV"`) and degree |
 | `count_kmv_dofs` | the same for KMV: degrees 1 to 6 on triangles, 1 to 3 on tetrahedra |
 | `mean_edge_lengths`, `local_mesh_size` | element size, and its sampling on a grid |
-| `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the DOF budget of an element (KMV by default) |
+| `radius_ratios`, `cell_angles` | shape quality of each cell: `d r / R` (1 for the regular simplex, 0 for a flat cell), and the angles of triangles or the dihedral angles of tetrahedra |
+| `audit_triangles`, `audit_tetrahedra`, `audit_mesh` | counts, measures, edges, shape quality (radius ratio, angles, smallest inscribed radius), orientation, interface conformity; `audit_mesh` adds the file's SHA-256 and the DOF budget of an element (KMV by default) |
 
 ## Tests
 
@@ -182,7 +204,8 @@ make lint
 make test
 ```
 
-`tests/test_*.py` test each module (the generation tests need gmsh).
+`tests/test_*.py` test each module (the generation tests need gmsh; the VTK
+files are also read back with VTK where the `vtk` module is installed).
 `tests/test_firedrake.py` loads the meshes in Firedrake and checks what the
 solver sees: the dimension of the KMV, Lagrange and DG spaces against
 `count_dofs`, the boundary markers, and the interfaces as mesh facets (`dS(SEAFLOOR)` in 3D).
